@@ -11,8 +11,7 @@ outplanted_seedlings <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado
 
 summary(outplanted_seedlings)
 
-
-seedlings_clean <- outplanted_seedlings%>% 
+seedlings_clean seedlings_clean seedlings_clean <- outplanted_seedlings%>% 
 #renames columns to simplified English, differentiates seed origin and seedling planted region
   rename(Name = 'Nombre')%>%
   rename(Town = 'Localidad')%>%
@@ -23,20 +22,24 @@ seedlings_clean <- outplanted_seedlings%>%
   rename(OriginReg = 'Procedencia semilla  (color)')%>% 
   rename(PlantedReg = 'Región')%>%
   rename(DatePlanted = 'Fecha transplante')%>%
-  mutate(DatePlanted = dmy(DatePlanted)) %>%
   rename(YearCollected = 'Año de colecta')%>%
   mutate(Monitor1=recode(Monitor1, #reclass Perdida (poor) as Muerta (dead)
                          'Perdida' = 'Muerta'))%>%
   add_column(DateDied = NA)%>%
   
-  #This mutate section isn't complete: it is working to update values in the DateDied column but the dates aren't correct and haven't covered all cases
-  mutate(DateDied = case_when(Monitor1 == 'Muerta' ~ '01-01-2000', #should be DatePlanted
+ 
+  mutate(DateDied = case_when(Monitor1 == 'Muerta' ~ DatePlanted,
                               Monitor1 == 'Nueva' & Monitor2 == 'Muerta' ~ '13-02-2022', 
+                              Monitor1 == 'Viva' & Monitor2 == 'Muerta' ~ DatePlanted,
                               Monitor1 == 'Nueva' & Monitor3 == 'Muerta' ~ '20-01-2023',
-                              Monitor2 == 'Nueva' & Monitor3 == 'Muerta' ~ '20-01-2023'))%>%
+                              Monitor1 == 'Viva' & Monitor3 == 'Muerta' ~ '20-01-2023',
+                              Monitor2 == 'Nueva' & Monitor3 == 'Muerta' ~ '20-01-2023',
+                              Monitor2 == 'Nueva' & Monitor3 == NA ~ current_date))%>%
   mutate(DateDied = dmy(DateDied))%>%
+  mutate(DatePlanted = dmy(DatePlanted))%>%
   add_column(MonthsAlive = NA)%>%
-  
+  mutate(MonthsAlive = DateDied - DatePlanted)
+
 summary(seedlings_clean)
 unique(seedlings_clean$DatePlanted)
 ?duration
