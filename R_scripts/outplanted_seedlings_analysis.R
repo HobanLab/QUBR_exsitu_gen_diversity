@@ -11,7 +11,9 @@ outplanted_seedlings <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado
 
 summary(outplanted_seedlings)
 
-seedlings_clean seedlings_clean seedlings_clean <- outplanted_seedlings%>% 
+#uses outplanted_seedlings dataset to create a cleaned dataset
+seedlings_clean <- outplanted_seedlings%>% 
+
 #renames columns to simplified English, differentiates seed origin and seedling planted region
   rename(Name = 'Nombre')%>%
   rename(Town = 'Localidad')%>%
@@ -19,32 +21,41 @@ seedlings_clean seedlings_clean seedlings_clean <- outplanted_seedlings%>%
   rename(Monitor1 = '13/02/2022 - Monitoreo 1')%>%
   rename(Monitor2 = '20/01/2023 Monitoreo 2')%>%
   rename(Monitor3 = '13/12/2023\nMonitoreo 3')%>%
-  rename(OriginReg = 'Procedencia semilla  (color)')%>% 
+  rename(OriginReg = 'Procedencia semilla  (color)')%>%
   rename(PlantedReg = 'Región')%>%
   rename(DatePlanted = 'Fecha transplante')%>%
   rename(YearCollected = 'Año de colecta')%>%
-  mutate(Monitor1=recode(Monitor1, #reclass Perdida (poor) as Muerta (dead)
-                         'Perdida' = 'Muerta'))%>%
+
+#reclass Perdida (poor) as Muerta (dead)
+  mutate(Monitor1=recode(Monitor1, 'Perdida' = 'Muerta'))%>%
+
+#calculate when a seedling died based on the last Monitoring date it was seen alive
   add_column(DateDied = NA)%>%
-  
- 
   mutate(DateDied = case_when(Monitor1 == 'Muerta' ~ DatePlanted,
-                              Monitor1 == 'Nueva' & Monitor2 == 'Muerta' ~ '13-02-2022', 
                               Monitor1 == 'Viva' & Monitor2 == 'Muerta' ~ DatePlanted,
+                              Monitor1 == 'Nueva' & Monitor2 == 'Muerta' ~ '13-02-2022',
                               Monitor1 == 'Nueva' & Monitor3 == 'Muerta' ~ '20-01-2023',
                               Monitor1 == 'Viva' & Monitor3 == 'Muerta' ~ '20-01-2023',
-                              Monitor2 == 'Nueva' & Monitor3 == 'Muerta' ~ '20-01-2023',
-                              Monitor2 == 'Nueva' & Monitor3 == NA ~ current_date))%>%
+                              Monitor2 == 'Nueva' & Monitor3 == 'Muerta' ~ '20-01-2023'))%>%
+
+#format date as DayMonthYear
   mutate(DateDied = dmy(DateDied))%>%
   mutate(DatePlanted = dmy(DatePlanted))%>%
   add_column(MonthsAlive = NA)%>%
+
+#calculate MonthsAlive as difference between DatePlanted and DateDied
   mutate(MonthsAlive = DateDied - DatePlanted)
+
+#assigns values for the dates monitoring took place
+Monitor1Date <- dmy("13/02/2022")
+Monitor2Date <- dmy("20/01/2023")
+Monitor3Date <- dmy("13/12/2023")
 
 summary(seedlings_clean)
 unique(seedlings_clean$DatePlanted)
 ?duration
 
-#s.durationstr() separates seedlings into seed origin region
+#separates seedlings into seed origin region
 seedlings_E <- seedlings_clean%>%
   filter(OriginReg == 'Golfo')
 seedlings_W <- seedlings_clean%>%
