@@ -124,8 +124,21 @@ top_100_for_extractions %>%
   geom_bar(aes(x = Region, fill = Region)) +
   theme_classic()
 
-
 # Bind the remaining inds on to this list so we can keep these 100 as the first extractions but then proceed semi randomly
 top_100_for_extractions %>%
   rbind(filter(tissue_field_600_inds, QUBR_ID %notin% top_100_for_extractions$QUBR_ID)) %>%
   write_csv(., "./data/600_inds_for_extractions.csv")
+
+
+# Dana making graphs to show Daniel 9/16/24
+summary(tissue_field_data)
+
+tissue_field_data%>%
+  ggplot() +
+  geom_boxplot(aes(x = Region, y = Weight, fill = Region)) +
+  theme_classic()
+
+tissue_field_data%>%
+  ggplot() +
+  geom_bar(aes(x = Region, fill = Region)) +
+  theme_classic()
