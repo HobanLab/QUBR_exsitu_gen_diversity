@@ -5,7 +5,6 @@ library(tibble)
 library(lubridate)
 setwd("..")
 
-#assigns values for the dates monitoring took place
 Today <- today()
 Monitor1Date <- dmy("13/02/2022")
 Monitor2Date <- dmy("20/01/2023")
@@ -17,9 +16,11 @@ outplanted_seedlings24 <- read_csv("./data/Datos de Siembra en Ranchos_Actualiza
 summary(outplanted_seedlings23)
 summary(outplanted_seedlings24)
 
+
 #combines data from 2023 and 2024 tabs
 seedlings_combined <- bind_rows(outplanted_seedlings23, outplanted_seedlings24)
 summary(seedlings_combined)
+
 #renames columns to simplified English, differentiates seed origin and seedling planted region
 seedlings_clean <- seedlings_combined%>%
   rename(Name = 'Nombre')%>%
@@ -41,9 +42,11 @@ seedlings_clean <- seedlings_combined%>%
   mutate(Monitor1=recode(Monitor1, 'Perdida' = 'Muerta'))%>%#reclass Perdida (poor) as Muerta (dead)
 #calculate when a seedling died based on the last Monitoring date it was seen alive
   add_column(DateDied = NA)%>%
-  mutate(DateDied = case_when((Monitor1 == 'Muerta') | (Monitor1 == 'Viva' & Monitor2 == 'Muerta') ~ DatePlanted,
-                              (Monitor1 == 'Nueva' & Monitor2 == 'Muerta') ~ '13-02-2022',
-                              (Monitor1 == 'Nueva' & Monitor3 == 'Muerta') | (Monitor1 == 'Viva' & Monitor3 == 'Muerta') | (Monitor2 == 'Nueva' & Monitor3 == 'Muerta') ~ '20-01-2023'))%>%
+  mutate(DateDied = case_when(Monitor1 == 'Muerta' ~ DatePlanted,
+                              Monitor2 == 'Muerta' ~ '13/02/2022',
+                              Monitor3 == 'Muerta' ~ '20/01/2022'))%>%
+  add_column(Outcome = NA)%>%
+  
 #format date as DayMonthYear
   add_column(TimeAlive = NA)%>%
   add_column(RatioTimeAlive = NA)%>%
@@ -53,63 +56,74 @@ seedlings_clean <- seedlings_combined%>%
   mutate(DatePlanted = dmy(DatePlanted))%>%
   mutate(RatioTimeAlive = dmy(RatioTimeAlive))%>%
   mutate(PotentialTimeAlive = dmy(PotentialTimeAlive))%>%
+  mutate(Outcome = case_when((Monitor1 == 'Muerta') | (Monitor2 == 'Muerta') | (Monitor3 == 'Muerta') | (Monitor4 == 'Muerta') ~ 'Dead',
+                             TRUE ~ 'Alive'))%>%
   
 #calculate TimeAlive as difference between DatePlanted and DateDied
   mutate(TimeAlive = DateDied - DatePlanted)%>%
-  mutate(PotentialTimeAlive = Today - DatePlanted)%>%#days since it was first planted
-  mutate(RatioTimeAlive = TimeAlive / PotentialTimeAlive) #this line doesn't work because you can't divide difftimes, but I needed to convert those columns to  
-  
+  mutate(PotentialTimeAlive = Today - DatePlanted)%>% #days since it was first planted
+  mutate(TimeAlive = case_when(Outcome == 'Alive' ~ (Today - DatePlanted),
+                               TRUE ~ (DateDied - DatePlanted)))
 
-summary(seedlings_clean)
+
+summary(seedlings_combined)
 ?duration
 ?class
+?numeric
 
-
-#separates seedlings into seed origin region
-seedlings_E <- seedlings_clean23%>%
-  filter(OriginReg == 'Golfo')
-seedlings_W <- seedlings_clean23%>%
-  filter(OriginReg =='Pacifico')
-seedlings_N <- seedlings_clean23%>%
-  filter(OriginReg == 'Norte')
-#includes all seedlings that were dead at 1st OR 2nd monitoring
-seedlings_dead <- seedlings_clean23%>% 
-  filter(Monitor1 == "Muerta" | Monitor2 == "Muerta")
-#includes all seedlings that were alive as of 2nd monitoring
-seedlings_alive <- seedlings_clean23%>%
-  filter(str_detect(Monitor2, "Viva"))
-#survival of seedlings by town
-#EAST 
-seedlings_E%>% 
-  ggplot() +
-  geom_bar(aes(x = Monitor2, fill = Monitor2)) +
-  facet_grid(~Town) +
-  theme_classic()
-#WEST
-seedlings_W%>% 
-  ggplot() +
-  geom_bar(aes(x = Monitor2, fill = Monitor2)) +
-  facet_grid(~Town) +
-  theme_classic()
-#NORTH
-seedlings_N%>% 
-  ggplot() +
-  geom_bar(aes(x = Monitor2, fill = Monitor2)) +
-  facet_grid(~Town) +
-  theme_classic()
-#seedling outcome by region
-seedlings_clean23%>%
+#seedling outcome by region of origin
+seedlings_clean%>%
   ggplot() +
   geom_bar(aes(x = Monitor2, fill = Monitor2)) +
   facet_grid(~OriginReg) +
   theme_classic()
 
-unique(seedlings_W$Monitor2)
+#how many of the seedlings are alive vs dead?
+seedlings_alive <- seedlings_clean%>%
+  filter(Outcome == 'Alive')
+seedlings_dead <- seedlings_clean%>%
+  filter(Outcome == 'Dead')
+#total mortality of seedlings
+seedlings_clean%>%
+  ggplot() +
+  geom_bar(aes(x = Outcome, fill = Outcome)) +
+  theme_classic()
 
-#there are more town names in Daniel's database than we used previously         
-seedlings_clean23 %>%
-  group_by(Town) %>%
-  summarise(count = n())
+#mortality of seedlings by region planted
+seedlings_clean%>%
+  ggplot() +
+  geom_bar(aes(x = Outcome, fill = PlantedReg)) +
+  facet_grid(~PlantedReg) +
+  theme_classic()
+?geom_text
+#mortality of seedlings by region of origin
+seedlings_clean%>%
+  ggplot() +
+  geom_bar(aes(x = Outcome, fill = OriginReg)) +
+  facet_grid(~OriginReg) +
+  theme_classic()
 
-#what columns are only in one tab, add those to the other tab, rbind command to combine (2024 to bottom of)
-?rbind
+#number of seedlings from each region of origin
+seedlings_clean%>%
+  ggplot() +
+  geom_bar(aes(x = OriginReg, fill = OriginReg)) +
+  theme_classic()
+
+#CHI SQUARED TEST
+# Create a data frame from the main data set
+watered_data = data.frame(seedlings_clean$Watered, seedlings_clean$Outcome)
+# Create a contingency table with the needed variables          
+watered_data = table(seedlings_clean$Watered,seedlings_clean$Outcome)
+print(watered_data)
+print(chisq.test(watered_data))
+
+OriginRegion_outcome = data.frame(seedlings_clean$Outcome, seedlings_clean$OriginReg)
+OriginRegion_outcome = table(seedlings_clean$Outcome, seedlings_clean$OriginReg)
+print(OriginRegion_outcome)
+print(chisq.test(OriginRegion_outcome))
+
+PlantedRegion_outcome = data.frame(seedlings_clean$Outcome, seedlings_clean$PlantedReg)
+PlantedRegion_outcome = table(seedlings_clean$Outcome, seedlings_clean$PlantedReg)
+print(PlantedRegion_outcome)
+print(chisq.test(PlantedRegion_outcome))
+
