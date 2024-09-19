@@ -44,7 +44,9 @@ seedlings_clean <- seedlings_combined%>%
   add_column(DateDied = NA)%>%
   mutate(DateDied = case_when(Monitor1 == 'Muerta' ~ DatePlanted,
                               Monitor2 == 'Muerta' ~ '13/02/2022',
-                              Monitor3 == 'Muerta' ~ '20/01/2022'))%>%
+                              is.na(Monitor2) ~ '13/02/2022',
+                              Monitor3 == 'Muerta' ~ '20/01/2022',
+                              is.na(Monitor3) ~ '20/01/2022'))%>%
   add_column(Outcome = NA)%>%
   
 #format date as DayMonthYear
@@ -56,20 +58,30 @@ seedlings_clean <- seedlings_combined%>%
   mutate(DatePlanted = dmy(DatePlanted))%>%
   mutate(RatioTimeAlive = dmy(RatioTimeAlive))%>%
   mutate(PotentialTimeAlive = dmy(PotentialTimeAlive))%>%
-  mutate(Outcome = case_when((Monitor1 == 'Muerta') | (Monitor2 == 'Muerta') | (Monitor3 == 'Muerta') | (Monitor4 == 'Muerta') ~ 'Dead',
-                             TRUE ~ 'Alive'))%>%
+  mutate(Outcome = case_when(Monitor1 == 'Muerta' ~ 'Dead',
+                             Monitor2 == 'Muerta' ~ 'Dead',
+                             is.na(Monitor2) ~ 'Presumed Dead',
+                             Monitor3 == 'Muerta' ~ 'Dead',
+                             is.na(Monitor3) ~ 'Presumed Dead',
+                             Monitor4 == 'Muerta' ~ 'Dead',
+                             Monitor3 == 'Viva' ~ 'Alive'))%>%
   
 #calculate TimeAlive as difference between DatePlanted and DateDied
   mutate(TimeAlive = DateDied - DatePlanted)%>%
   mutate(PotentialTimeAlive = Today - DatePlanted)%>% #days since it was first planted
   mutate(TimeAlive = case_when(Outcome == 'Alive' ~ (Today - DatePlanted),
-                               TRUE ~ (DateDied - DatePlanted)))
+                               Outcome == 'Dead' ~ (DateDied - DatePlanted),
+                               Outcome == 'Presumed Dead' ~ (DateDied - DatePlanted)))
 
 
-summary(seedlings_combined)
-?duration
-?class
-?numeric
+
+
+#prioritize seedlings for visits while in Baja based on number of individuals at each ranch  
+seedlings_clean%>%
+  filter(Outcome == 'Alive')%>%
+  group_by(PlantedReg, Ranch)%>%
+  summarise(n())
+  
 
 #seedling outcome by region of origin
 seedlings_clean%>%
@@ -83,30 +95,35 @@ seedlings_alive <- seedlings_clean%>%
   filter(Outcome == 'Alive')
 seedlings_dead <- seedlings_clean%>%
   filter(Outcome == 'Dead')
+
 #total mortality of seedlings
 seedlings_clean%>%
-  ggplot() +
-  geom_bar(aes(x = Outcome, fill = Outcome)) +
+  ggplot(aes(x = Outcome, y =..count..,)) +
+  geom_bar(aes(fill = Outcome)) +
+  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
   theme_classic()
 
 #mortality of seedlings by region planted
 seedlings_clean%>%
-  ggplot() +
-  geom_bar(aes(x = Outcome, fill = PlantedReg)) +
+  ggplot(aes(x = Outcome, y = ..count..,)) +
+  geom_bar(aes(fill = PlantedReg)) +
   facet_grid(~PlantedReg) +
+  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
   theme_classic()
-?geom_text
+
 #mortality of seedlings by region of origin
 seedlings_clean%>%
-  ggplot() +
-  geom_bar(aes(x = Outcome, fill = OriginReg)) +
+  ggplot(aes(x = Outcome, y = ..count..,)) +
+  geom_bar(aes(fill = OriginReg)) +
   facet_grid(~OriginReg) +
+  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
   theme_classic()
 
 #number of seedlings from each region of origin
 seedlings_clean%>%
-  ggplot() +
-  geom_bar(aes(x = OriginReg, fill = OriginReg)) +
+  ggplot(aes(x = OriginReg, y =..count..,)) +
+  geom_bar(aes(fill = OriginReg)) +
+  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
   theme_classic()
 
 #CHI SQUARED TEST
