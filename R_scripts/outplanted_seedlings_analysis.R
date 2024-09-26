@@ -42,11 +42,20 @@ seedlings_clean <- seedlings_combined%>%
   mutate(Monitor1=recode(Monitor1, 'Perdida' = 'Muerta'))%>%#reclass Perdida (poor) as Muerta (dead)
 #calculate when a seedling died based on the last Monitoring date it was seen alive
   add_column(DateDied = NA)%>%
-  mutate(DateDied = case_when(Monitor1 == 'Muerta' ~ DatePlanted,
-                              Monitor2 == 'Muerta' ~ '13/02/2022',
-                              is.na(Monitor2) ~ '13/02/2022',
-                              Monitor3 == 'Muerta' ~ '20/01/2022',
-                              is.na(Monitor3) ~ '20/01/2022'))%>%
+  mutate(DateDied = case_when(is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) ~ DatePlanted,
+
+                              Monitor1 == 'Nueva' & is.na(Monitor2) ~ DatePlanted,
+                              Monitor1 == 'Nueva' & Monitor2 == 'Muerta' ~ DatePlanted,
+                              
+                              Monitor1 == 'Muerta' ~ DatePlanted,
+                              
+                              Monitor1 == 'Viva' & Monitor2 == 'Muerta' ~'13/02/2022',
+                              
+                              Monitor2 == 'Viva' & is.na(Monitor3) ~ '20/01/2023',
+                              Monitor1 == 'Viva' & is.na(Monitor2) ~ '13/02/2022',
+                              Monitor2 == 'Nueva' & Monitor3 == 'Muerta' ~ DatePlanted,
+                              Monitor2 == 'Nueva' & is.na(Monitor3) ~ DatePlanted,
+                              Monitor2 == 'Viva' & Monitor3 == 'Muerta' ~ '20/01/2023'))%>%
   add_column(Outcome = NA)%>%
   
 #format date as DayMonthYear
@@ -58,30 +67,63 @@ seedlings_clean <- seedlings_combined%>%
   mutate(DatePlanted = dmy(DatePlanted))%>%
   mutate(RatioTimeAlive = dmy(RatioTimeAlive))%>%
   mutate(PotentialTimeAlive = dmy(PotentialTimeAlive))%>%
-  mutate(Outcome = case_when(Monitor1 == 'Muerta' ~ 'Dead',
-                             Monitor2 == 'Muerta' ~ 'Dead',
-                             is.na(Monitor2) ~ 'Presumed Dead',
-                             Monitor3 == 'Muerta' ~ 'Dead',
-                             is.na(Monitor3) ~ 'Presumed Dead',
-                             Monitor4 == 'Muerta' ~ 'Dead',
-                             Monitor3 == 'Viva' ~ 'Alive'))%>%
+  mutate(Outcome = case_when(Monitor1 == 'Muerta' | Monitor2 == 'Muerta' | Monitor3 == 'Muerta' ~ 'Dead',
+                             
+                             Monitor3 == 'Nueva' | Monitor3 == 'Viva' ~ 'Alive',
+                             
+                             Monitor2 == 'Nueva' & is.na(Monitor3) ~ 'Presumed Dead',
+                             Monitor2 == 'Viva' & is.na(Monitor3) ~ 'Presumed Dead',
+                             is.na(Monitor2) & is.na(Monitor3) ~ 'Presumed Dead',
+                             is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) ~ 'Presumed Dead'
+                             ))%>%
   
 #calculate TimeAlive as difference between DatePlanted and DateDied
   mutate(TimeAlive = DateDied - DatePlanted)%>%
   mutate(PotentialTimeAlive = Today - DatePlanted)%>% #days since it was first planted
   mutate(TimeAlive = case_when(Outcome == 'Alive' ~ (Today - DatePlanted),
                                Outcome == 'Dead' ~ (DateDied - DatePlanted),
-                               Outcome == 'Presumed Dead' ~ (DateDied - DatePlanted)))
-
+                               Outcome == 'Presumed Dead' ~ (DateDied - DatePlanted)))%>%
+  mutate(RatioTimeAlive = (as.numeric(TimeAlive)) / (as.numeric(PotentialTimeAlive)))%>%
+#removes rows for individuals handed out at Festival 2023
+    filter(!str_detect(Ranch, "Festival"))
 
 
 
 #prioritize seedlings for visits while in Baja based on number of individuals at each ranch  
-seedlings_clean%>%
+priority_sites <- seedlings_clean%>%
   filter(Outcome == 'Alive')%>%
-  group_by(PlantedReg, Ranch)%>%
+  group_by(PlantedReg, Ranch, N, W)%>%
   summarise(n())
   
+#export .csv to make Google Map of sites
+#write.csv(priority_sites, "priority_sites.csv")
+
+
+#increments of how old a seedling could be
+df_age <- 
+  data.frame("Days"=seq(0, 1200, 1), "DaysAlive" = NA)
+  
+
+#for loop  
+for (i in df_age) {
+  sum(i <= df_age$DaysAlive)
+}
+
+
+
+
+  
+seedlings_clean%>%
+  ggplot() +
+  geom_histogram(aes(x = TimeAlive)) +
+  theme_classic()
+  
+
+#TimeAlive per PlantedRegion
+seedlings_clean%>%
+  ggplot() +
+  geom_boxplot(aes(x = PlantedReg, y = TimeAlive, fill = PlantedReg)) +
+  theme_classic()
 
 #seedling outcome by region of origin
 seedlings_clean%>%
@@ -143,4 +185,3 @@ PlantedRegion_outcome = data.frame(seedlings_clean$Outcome, seedlings_clean$Plan
 PlantedRegion_outcome = table(seedlings_clean$Outcome, seedlings_clean$PlantedReg)
 print(PlantedRegion_outcome)
 print(chisq.test(PlantedRegion_outcome))
-
