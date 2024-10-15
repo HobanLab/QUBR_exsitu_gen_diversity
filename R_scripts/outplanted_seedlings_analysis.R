@@ -3,6 +3,7 @@ library(ggplot2)
 library(dplyr)
 library(tibble)
 library(lubridate)
+library(chisq.posthoc.test)
 setwd("..")
 
 Today <- today()
@@ -95,25 +96,28 @@ priority_sites <- seedlings_clean%>%
   group_by(PlantedReg, Ranch, N, W)%>%
   summarise(n())
   
-#export .csv to make Google Map of sites
-#write.csv(priority_sites, "priority_sites.csv")
 
 
 #increments of how old a seedling could be
 df_age <- 
-  data.frame("Days"=seq(0, 1200, 1), "DaysAlive" = NA)
-  
+  data.frame("Days"=seq(0, 1200, 1), "TotalAlive" = NA)
 
 #for loop  
-for (i in df_age) {
-  sum(i <= df_age$DaysAlive)
-}
+for (i in 1:nrow(df_age)) {
+  Day <- df_age$Days[i] #df_age$Days is a vector (one column in this df)
+  Num_seedlings_alive <- sum(Day <= seedlings_clean$TimeAlive, na.rm = TRUE)
+  #Day is a temporary object that holds the output of the day we are on in the iterative loop
+  df_age$TotalAlive[i] <- paste0(Num_seedlings_alive)
+  }
 
+?geom_histogram
+#plot survivorship curve
+df_age%>%
+  ggplot(aes(x = Days, y = TotalAlive)) +
+  geom_histogram(binwidth = 1) +
+  theme_classic()
 
-
-
-  
-seedlings_clean%>%
+seedlings_clean%>%sDayseedlings_clean%>%
   ggplot() +
   geom_histogram(aes(x = TimeAlive)) +
   theme_classic()
@@ -185,3 +189,12 @@ PlantedRegion_outcome = data.frame(seedlings_clean$Outcome, seedlings_clean$Plan
 PlantedRegion_outcome = table(seedlings_clean$Outcome, seedlings_clean$PlantedReg)
 print(PlantedRegion_outcome)
 print(chisq.test(PlantedRegion_outcome))
+
+#POST HOC TEST
+chisq.posthoc.test(OriginRegion_outcome)
+chisq.posthoc.test(PlantedRegion_outcome)
+chisq.posthoc.test(watered_data)
+
+
+#export .csv to make Google Map of sites
+#write.csv(priority_sites, "priority_sites.csv")
