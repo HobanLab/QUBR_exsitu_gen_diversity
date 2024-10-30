@@ -1,3 +1,4 @@
+####SET UP####
 library(tidyverse)
 library(ggplot2)
 library(dplyr)
@@ -17,7 +18,7 @@ outplanted_seedlings24 <- read_csv("./data/Datos de Siembra en Ranchos_Actualiza
 summary(outplanted_seedlings23)
 summary(outplanted_seedlings24)
 
-
+####DATA CLEANING####
 #combines data from 2023 and 2024 tabs
 seedlings_combined <- bind_rows(outplanted_seedlings23, outplanted_seedlings24)
 summary(seedlings_combined)
@@ -88,8 +89,9 @@ seedlings_clean <- seedlings_combined%>%
 #removes rows for individuals handed out at Festival 2023
     filter(!str_detect(Ranch, "Festival"))
 
+#How many different lengths of time have individuals been alive for?
 
-
+unique(seedlings_clean$PotentialTimeAlive)
 #prioritize seedlings for visits while in Baja based on number of individuals at each ranch  
 priority_sites <- seedlings_clean%>%
   filter(Outcome == 'Alive')%>%
@@ -98,31 +100,200 @@ priority_sites <- seedlings_clean%>%
   
 
 
-#increments of how old a seedling could be
-df_age <- 
-  data.frame("Days"=seq(0, 1200, 1), "TotalAlive" = NA)
 
-#for loop  
+####SURVIVORSHIP CURVE####
+#creating a df with increments of 1 day to represent how old a seedling could be
+df_age <- 
+  data.frame("Days"=seq(0, 1220, 1), "TotalAlive" = NA) 
+
+#for loop: how many individuals were still alive at any given duration?
+#ALL
 for (i in 1:nrow(df_age)) {
   Day <- df_age$Days[i] #df_age$Days is a vector (one column in this df)
   Num_seedlings_alive <- sum(Day <= seedlings_clean$TimeAlive, na.rm = TRUE)
   #Day is a temporary object that holds the output of the day we are on in the iterative loop
   df_age$TotalAlive[i] <- paste0(Num_seedlings_alive)
+  #fill one cell per iteration with the total number of seedlings alive by that day
   }
 
-?geom_histogram
 #plot survivorship curve
-df_age%>%
-  ggplot(aes(x = Days, y = TotalAlive)) +
-  geom_histogram(binwidth = 1) +
-  theme_classic()
-
-seedlings_clean%>%sDayseedlings_clean%>%
-  ggplot() +
-  geom_histogram(aes(x = TimeAlive)) +
-  theme_classic()
+df_age_final <- df_age%>%
+  mutate(TotalAlive = as.numeric(TotalAlive))%>%
+  mutate(PercentAlive = TotalAlive/max(TotalAlive, na.rm = TRUE))%>%
+  mutate(data_type = "all")
   
+df_age_final %>%
+  ggplot(aes(x = Days, y = PercentAlive)) +
+  ggtitle("All") +
+  geom_step() +
+  theme_classic()
 
+
+#representing y-axis as a ratio of days an individual lived / days it could have been alive for
+#bc not all of the seedlings were planted on the same day, some have had the chance to grow longer than others
+df_age_ratio <- 
+  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA)
+
+for (i in 1:nrow(df_age_ratio)) {
+  Ratio_Value <- df_age_ratio$Ratio[i]
+  ratio_hold <- sum(Ratio_Value <= seedlings_clean$RatioTimeAlive, na.rm = TRUE)
+  df_age_ratio$TotalValue[i] <- as.numeric(ratio_hold)
+}
+
+df_age_ratio %>%
+  ggplot() +
+  geom_step(aes(x = Ratio, y = TotalValue)) +
+  theme_classic()
+
+#representing the same information, but broken up into groups by planting date
+
+#filtering seedlings: individuals planted before M1
+seedlings_clean_M1 <- seedlings_clean%>%
+  filter(DatePlanted < '2022-02-13')
+
+M1_age <-
+  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA)
+
+for (i in 1:nrow(M1_age)) {
+  Ratio_Value <- M1_age$Ratio[i]
+  ratio_hold <- sum(Ratio_Value <= seedlings_clean_M1$RatioTimeAlive, na.rm = TRUE)
+  M1_age$TotalValue[i] <- as.numeric(ratio_hold)
+}
+
+M1_age %>%
+  ggplot() +
+  ggtitle("M1") +
+  geom_step(aes(x = Ratio, y = TotalValue)) +
+  ylim(0, 510) +
+  theme_classic()
+ 
+#Repeat filtering seedlings: individuals planted between M1 & M2
+seedlings_clean_M2 <- seedlings_clean%>%
+  filter(DatePlanted < '2023-01-20', DatePlanted > '2022-02-13')
+
+M2_age <-
+  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA)
+  
+for (i in 1:nrow(M2_age)) {
+  Ratio_Value <- M2_age$Ratio[i]
+  ratio_hold <- sum(Ratio_Value <= seedlings_clean_M2$RatioTimeAlive, na.rm = TRUE)
+  M2_age$TotalValue[i] <- as.numeric(ratio_hold)
+  }
+
+M2_age %>%
+  ggplot() +
+  ggtitle("M2") +
+  geom_step(aes(x = Ratio, y = TotalValue)) +
+  ylim(0, 1159) +
+  theme_classic()
+
+#Repeat filtering seedlings: individuals planted between M2 & M3
+
+seedlings_clean_M3 <- seedlings_clean%>%
+  filter(DatePlanted < '2023-12-13', DatePlanted > '2023-01-20')
+
+M3_age <-
+  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA)
+
+for (i in 1:nrow(M3_age)) {
+  Ratio_Value <- M3_age$Ratio[i]
+  ratio_hold <- sum(Ratio_Value <= seedlings_clean_M3$RatioTimeAlive, na.rm = TRUE)
+  M3_age$TotalValue[i] <- as.numeric(ratio_hold)
+}
+
+M3_age %>%
+  ggplot() +
+  ggtitle("M3") +
+  geom_step(aes(x = Ratio, y = TotalValue)) +
+  ylim(0, 40) +
+  theme_classic()
+
+
+#Same as M3, plus the 10 individuals planted after M3
+
+seedlings_clean_M3.1 <- seedlings_clean%>%
+  filter(DatePlanted > '2023-01-20')
+
+M3.1_age <-
+  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA)
+
+for (i in 1:nrow(M3.1_age)) {
+  Ratio_Value <- M3.1_age$Ratio[i]
+  ratio_hold <- sum(Ratio_Value <= seedlings_clean_M3.1$RatioTimeAlive, na.rm = TRUE)
+  M3.1_age$TotalValue[i] <- as.numeric(ratio_hold)
+}
+
+M3.1_age %>%
+  ggplot() +
+  ggtitle("M3+") +
+  geom_step(aes(x = Ratio, y = TotalValue)) +
+  ylim(0, 40) +
+  theme_classic()
+
+
+    
+####WATERED####
+seedlings_clean_watered <- seedlings_clean%>%
+  filter(Watered == "Si")
+
+df_age_watered <-
+  data.frame("Days"=seq(0, 1220, 1), "TotalAlive" = NA)
+
+for (i in 1:nrow(df_age)) {
+  Day <- df_age_watered$Days[i]
+  Num_seedlings_alive <- sum(Day <= seedlings_clean_watered$TimeAlive, na.rm = TRUE)
+  df_age_watered$TotalAlive[i] <- paste0(Num_seedlings_alive)
+}
+class(seedlings_clean$DatePlanted)
+
+df_age_watered_final <- df_age_watered%>%
+  mutate(TotalAlive = as.numeric(TotalAlive))%>%
+  mutate(PercentAlive = TotalAlive/max(TotalAlive, na.rm = TRUE))%>%
+  mutate(data_type = "watered")
+
+df_age_watered_final %>%
+  ggplot(aes(x = Days, y = PercentAlive)) +
+  ggtitle("Watered") +
+  geom_step() +
+  theme_classic()
+
+
+
+####UNWATERED####
+seedlings_clean_unwatered <- seedlings_clean%>%
+  filter(Watered == 'No')
+
+df_age_unwatered <-
+  data.frame("Days"=seq(0, 1220, 1), "TotalAlive" = NA)
+
+for (i in 1:nrow(df_age)) {
+  Day <- df_age_unwatered$Days[i]
+  Num_seedlings_alive <- sum(Day <= seedlings_clean_unwatered$TimeAlive, na.rm = TRUE)
+  df_age_unwatered$TotalAlive[i] <- paste0(Num_seedlings_alive)
+}
+
+df_age_unwatered_final <- df_age_unwatered%>%
+  mutate(TotalAlive = as.numeric(TotalAlive))%>%
+  mutate(PercentAlive = TotalAlive/max(TotalAlive, na.rm = TRUE)) %>%
+  mutate(data_type = "unwatered")
+
+df_age_unwatered_final %>%
+  ggplot(aes(x = Days, y = PercentAlive)) +
+  ggtitle("Unwatered") +
+  geom_step() +
+  theme_classic()
+
+df_age_for_plotting <- rbind(df_age_final, df_age_watered_final, df_age_unwatered_final)
+
+df_age_for_plotting %>%
+  ggplot(aes(x = Days, y = TotalAlive, color = data_type)) +
+  geom_step() +
+  theme_classic()
+
+
+
+
+####OTHER GRAPHS####
 #TimeAlive per PlantedRegion
 seedlings_clean%>%
   ggplot() +
@@ -172,7 +343,7 @@ seedlings_clean%>%
   geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
   theme_classic()
 
-#CHI SQUARED TEST
+####CHI SQUARED TEST####
 # Create a data frame from the main data set
 watered_data = data.frame(seedlings_clean$Watered, seedlings_clean$Outcome)
 # Create a contingency table with the needed variables          
@@ -190,7 +361,7 @@ PlantedRegion_outcome = table(seedlings_clean$Outcome, seedlings_clean$PlantedRe
 print(PlantedRegion_outcome)
 print(chisq.test(PlantedRegion_outcome))
 
-#POST HOC TEST
+####POST HOC TEST####
 chisq.posthoc.test(OriginRegion_outcome)
 chisq.posthoc.test(PlantedRegion_outcome)
 chisq.posthoc.test(watered_data)
