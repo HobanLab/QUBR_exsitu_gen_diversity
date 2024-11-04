@@ -167,7 +167,37 @@ M1_age %>%
   ylim(0, 510) +
   theme_classic()
  
-#Repeat filtering seedlings: individuals planted between M1 & M2
+
+####CONVERTING FOR LOOP TO FUNCTION####
+
+#Example of a function that prints "a b"
+test_function <- function(sequence, fill_in){
+  temp <- paste(sequence, fill_in)
+  #return(temp)
+  }
+test_function("a", "b")
+test_function("c", "d")
+
+
+#creates a blank loop that can be repeated for each age class(M1, M2, etc)
+loop_function <- function(source, CustomSequence, fill_in){
+  df <- data.frame("Ratio" = CustomSequence, fill_in = NA)
+  names(df)[2] <- c(fill_in) #overwrites the column title
+  for (i in 1:nrow(df)) {
+    Ratio_Value <- df$Ratio[i]
+    ratio_hold <- sum(Ratio_Value <= source$RatioTimeAlive, na.rm = TRUE)
+    df[i,2] <-as.numeric(ratio_hold) #saves value to the i row in the 2nd column
+  }
+  return(df) #this is the part of the for loop we want back as results
+}
+
+M2_age <- loop_function(seedlings_clean_M2, seq(0, 1, .01), "TotalValue")
+M3_age <- loop_function(seedlings_clean_M3, seq(0, 1, .01), "TotalValue")
+M3.1_age <- loop_function(seedlings_clean_M3.1, seq(0, 1, .01), "TotalValue")
+
+
+
+#Without a function: Repeat filtering seedlings: individuals planted between M1 & M2
 seedlings_clean_M2 <- seedlings_clean%>%
   filter(DatePlanted < '2023-01-20', DatePlanted > '2022-02-13')
 
@@ -244,8 +274,6 @@ for (i in 1:nrow(df_age)) {
   Num_seedlings_alive <- sum(Day <= seedlings_clean_watered$TimeAlive, na.rm = TRUE)
   df_age_watered$TotalAlive[i] <- paste0(Num_seedlings_alive)
 }
-class(seedlings_clean$DatePlanted)
-
 df_age_watered_final <- df_age_watered%>%
   mutate(TotalAlive = as.numeric(TotalAlive))%>%
   mutate(PercentAlive = TotalAlive/max(TotalAlive, na.rm = TRUE))%>%
@@ -283,14 +311,20 @@ df_age_unwatered_final %>%
   geom_step() +
   theme_classic()
 
+#combining layers for all individuals, watered, and unwatered onto one axis
 df_age_for_plotting <- rbind(df_age_final, df_age_watered_final, df_age_unwatered_final)
 
+#displaying as total values of each data_type (watered/unwatered/all)
 df_age_for_plotting %>%
   ggplot(aes(x = Days, y = TotalAlive, color = data_type)) +
   geom_step() +
   theme_classic()
 
-
+#displaying as percentages of each data_type (watered/unwatered/all)
+df_age_for_plotting %>%
+  ggplot(aes(x = Days, y = PercentAlive, color = data_type)) +
+  geom_step() +
+  theme_classic()
 
 
 ####OTHER GRAPHS####
