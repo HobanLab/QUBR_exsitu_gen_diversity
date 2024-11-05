@@ -101,7 +101,7 @@ priority_sites <- seedlings_clean%>%
 
 
 
-####SURVIVORSHIP CURVE####
+####FOR LOOP: SURVIVORSHIP CURVE####
 #creating a df with increments of 1 day to represent how old a seedling could be
 df_age <- 
   data.frame("Days"=seq(0, 1220, 1), "TotalAlive" = NA) 
@@ -131,42 +131,28 @@ df_age_final %>%
 
 #representing y-axis as a ratio of days an individual lived / days it could have been alive for
 #bc not all of the seedlings were planted on the same day, some have had the chance to grow longer than others
-df_age_ratio <- 
-  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA)
 
-for (i in 1:nrow(df_age_ratio)) {
+df_age_ratio <- #creates a df that counts from 0 to 1, and with blank columns for TotalValue & PercValue
+  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA, "PercValue" = NA)
+
+for (i in 1:nrow(df_age_ratio)) {#for loop fills in TotalValue column
   Ratio_Value <- df_age_ratio$Ratio[i]
   ratio_hold <- sum(Ratio_Value <= seedlings_clean$RatioTimeAlive, na.rm = TRUE)
   df_age_ratio$TotalValue[i] <- as.numeric(ratio_hold)
 }
 
-df_age_ratio %>%
+df_age_ratio_perc <- df_age_ratio%>%
+  mutate(TotalValue = as.numeric(TotalValue))%>%
+  mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
+
+df_age_ratio %>% #curve shown with y = raw values
   ggplot() +
   geom_step(aes(x = Ratio, y = TotalValue)) +
   theme_classic()
-
-#representing the same information, but broken up into groups by planting date
-
-#filtering seedlings: individuals planted before M1
-seedlings_clean_M1 <- seedlings_clean%>%
-  filter(DatePlanted < '2022-02-13')
-
-M1_age <-
-  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA)
-
-for (i in 1:nrow(M1_age)) {
-  Ratio_Value <- M1_age$Ratio[i]
-  ratio_hold <- sum(Ratio_Value <= seedlings_clean_M1$RatioTimeAlive, na.rm = TRUE)
-  M1_age$TotalValue[i] <- as.numeric(ratio_hold)
-}
-
-M1_age %>%
+df_age_ratio_perc %>% #curve shown with y = percentage
   ggplot() +
-  ggtitle("M1") +
-  geom_step(aes(x = Ratio, y = TotalValue)) +
-  ylim(0, 510) +
+  geom_step(aes(x = Ratio, y = PercValue)) +
   theme_classic()
- 
 
 ####CONVERTING FOR LOOP TO FUNCTION####
 
@@ -179,9 +165,19 @@ test_function("a", "b")
 test_function("c", "d")
 
 
+#these are the age classes I want to define
+seedlings_clean_M1 <- seedlings_clean%>% #planted before M1
+  filter(DatePlanted < '2022-02-13')
+seedlings_clean_M2 <- seedlings_clean%>% #planted between M1 & M2
+  filter(DatePlanted < '2023-01-20', DatePlanted > '2022-02-13')
+seedlings_clean_M3 <- seedlings_clean%>% #planted between M2 & M3
+  filter(DatePlanted < '2023-12-13', DatePlanted > '2023-01-20')
+seedlings_clean_M3.1 <- seedlings_clean%>% #planted after M2
+  filter(DatePlanted > '2023-01-20')
+
 #creates a blank loop that can be repeated for each age class(M1, M2, etc)
 loop_function <- function(source, CustomSequence, fill_in){
-  df <- data.frame("Ratio" = CustomSequence, fill_in = NA)
+  df <- data.frame("Ratio" = CustomSequence, fill_in = NA, "PercValue" = NA)
   names(df)[2] <- c(fill_in) #overwrites the column title
   for (i in 1:nrow(df)) {
     Ratio_Value <- df$Ratio[i]
@@ -191,73 +187,127 @@ loop_function <- function(source, CustomSequence, fill_in){
   return(df) #this is the part of the for loop we want back as results
 }
 
-M2_age <- loop_function(seedlings_clean_M2, seq(0, 1, .01), "TotalValue")
-M3_age <- loop_function(seedlings_clean_M3, seq(0, 1, .01), "TotalValue")
-M3.1_age <- loop_function(seedlings_clean_M3.1, seq(0, 1, .01), "TotalValue")
+#these are the age classes I want to repeat the for loop on
+#also converts TotalValue into PercValue and fills an additional column
+M1_age <- loop_function(seedlings_clean_M1, seq(0, 1, .01), "TotalValue")%>%
+  mutate(TotalValue = as.numeric(TotalValue))%>%
+  mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
+M2_age <- loop_function(seedlings_clean_M2, seq(0, 1, .01), "TotalValue")%>%
+  mutate(TotalValue = as.numeric(TotalValue))%>%
+  mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
+M3_age <- loop_function(seedlings_clean_M3, seq(0, 1, .01), "TotalValue")%>%
+  mutate(TotalValue = as.numeric(TotalValue))%>%
+  mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
+M3.1_age <- loop_function(seedlings_clean_M3.1, seq(0, 1, .01), "TotalValue")%>%
+  mutate(TotalValue = as.numeric(TotalValue))%>%
+  mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
 
 
+#displays the survivorship curve for each age class (M1, M2, M3 & M3.1)
+#y = raw numbers
+M1_age %>% #between 06/22/21 and 02/13/22: 236 days
+  ggplot() +
+  ggtitle("M1") +
+  geom_step(aes(x = Ratio, y = TotalValue)) +
+  ylim(0, 510) +
+  geom_vline(xintercept = 100/236, linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/236), y=500) +
+  geom_vline(xintercept = 200/236, linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/236), y=500) +
+  theme_classic()
 
-#Without a function: Repeat filtering seedlings: individuals planted between M1 & M2
-seedlings_clean_M2 <- seedlings_clean%>%
-  filter(DatePlanted < '2023-01-20', DatePlanted > '2022-02-13')
-
-M2_age <-
-  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA)
-  
-for (i in 1:nrow(M2_age)) {
-  Ratio_Value <- M2_age$Ratio[i]
-  ratio_hold <- sum(Ratio_Value <= seedlings_clean_M2$RatioTimeAlive, na.rm = TRUE)
-  M2_age$TotalValue[i] <- as.numeric(ratio_hold)
-  }
-
-M2_age %>%
+M2_age %>% #between 02/13/22 and 01/20/23: 341 days
   ggplot() +
   ggtitle("M2") +
   geom_step(aes(x = Ratio, y = TotalValue)) +
   ylim(0, 1159) +
+  geom_vline(xintercept = 100/341, linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/341), y=1100) +
+  geom_vline(xintercept = 200/341, linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/341), y=1100 ) +
+  geom_vline(xintercept = 300/341, linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/341), y=1100 ) +
   theme_classic()
 
-#Repeat filtering seedlings: individuals planted between M2 & M3
-
-seedlings_clean_M3 <- seedlings_clean%>%
-  filter(DatePlanted < '2023-12-13', DatePlanted > '2023-01-20')
-
-M3_age <-
-  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA)
-
-for (i in 1:nrow(M3_age)) {
-  Ratio_Value <- M3_age$Ratio[i]
-  ratio_hold <- sum(Ratio_Value <= seedlings_clean_M3$RatioTimeAlive, na.rm = TRUE)
-  M3_age$TotalValue[i] <- as.numeric(ratio_hold)
-}
-
-M3_age %>%
+M3_age %>% #between 01/20/23 and 12/13/23: 327 days
   ggplot() +
   ggtitle("M3") +
   geom_step(aes(x = Ratio, y = TotalValue)) +
   ylim(0, 40) +
+  geom_vline(xintercept = 100/327, linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/327), y=40 ) +
+  geom_vline(xintercept = 200/327, linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/327), y=40 ) +
+  geom_vline(xintercept = 300/327, linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/327), y=40 ) +
   theme_classic()
 
-
-#Same as M3, plus the 10 individuals planted after M3
-
-seedlings_clean_M3.1 <- seedlings_clean%>%
-  filter(DatePlanted > '2023-01-20')
-
-M3.1_age <-
-  data.frame("Ratio" =seq(0, 1, .01), "TotalValue" = NA)
-
-for (i in 1:nrow(M3.1_age)) {
-  Ratio_Value <- M3.1_age$Ratio[i]
-  ratio_hold <- sum(Ratio_Value <= seedlings_clean_M3.1$RatioTimeAlive, na.rm = TRUE)
-  M3.1_age$TotalValue[i] <- as.numeric(ratio_hold)
-}
-
-M3.1_age %>%
+M3.1_age %>% #after 01/20/23 (last updated 04/19/2024): 455 days
   ggplot() +
   ggtitle("M3+") +
   geom_step(aes(x = Ratio, y = TotalValue)) +
   ylim(0, 40) +
+  geom_vline(xintercept = 100/455, linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/455), y=1 ) +
+  geom_vline(xintercept = 200/455, linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/455), y=1 ) +
+  geom_vline(xintercept = 300/455, linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/455), y=1 ) +
+  geom_vline(xintercept = 400/455, linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/455), y=1 ) +
+  theme_classic()
+
+#y = percent
+M1_age %>% #changes y axis from TotalValue to PercValue
+  ggplot() +
+  ggtitle("M1") +
+  geom_step(aes(x = Ratio, y = PercValue)) +
+  ylim(0, 1) +
+  geom_vline(xintercept = 100/236, linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/236), y=1) +
+  geom_vline(xintercept = 200/236, linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/236), y=1) +
+  theme_classic()
+
+M2_age %>%
+  ggplot() +
+  ggtitle("M2") +
+  geom_step(aes(x = Ratio, y = PercValue)) +
+  ylim(0, 1) +
+  geom_vline(xintercept = 100/341, linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/341), y=1 ) +
+  geom_vline(xintercept = 200/341, linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/341), y=1 ) +
+  geom_vline(xintercept = 300/341, linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/341), y=1 ) +
+  theme_classic()
+
+M3_age %>% #changes y axis from TotalValue to PercValue
+  ggplot() +
+  ggtitle("M3") +
+  geom_step(aes(x = Ratio, y = PercValue)) +
+  ylim(0, 1) +
+  geom_vline(xintercept = 100/327, linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/327), y=1 ) +
+  geom_vline(xintercept = 200/327, linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/327), y=1 ) +
+  geom_vline(xintercept = 300/327, linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/327), y=1 ) +
+  theme_classic()
+
+M3.1_age %>% #changes y axis from TotalValue to PercValue
+  ggplot() +
+  ggtitle("M3+") +
+  geom_step(aes(x = Ratio, y = PercValue)) +
+  ylim(0, 1) +
+  geom_vline(xintercept = 100/455, linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/455), y=1 ) +
+  geom_vline(xintercept = 200/455, linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/455), y=1 ) +
+  geom_vline(xintercept = 300/455, linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/455), y=1 ) +
+  geom_vline(xintercept = 400/455, linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/455), y=1 ) +
   theme_classic()
 
 
