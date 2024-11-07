@@ -162,8 +162,6 @@ test_function <- function(sequence, fill_in){
   #return(temp)
   }
 test_function("a", "b")
-test_function("c", "d")
-
 
 #these are the age classes I want to define
 seedlings_clean_M1 <- seedlings_clean%>% #planted before M1
@@ -172,7 +170,7 @@ seedlings_clean_M2 <- seedlings_clean%>% #planted between M1 & M2
   filter(DatePlanted < '2023-01-20', DatePlanted > '2022-02-13')
 seedlings_clean_M3 <- seedlings_clean%>% #planted between M2 & M3
   filter(DatePlanted < '2023-12-13', DatePlanted > '2023-01-20')
-seedlings_clean_M3.1 <- seedlings_clean%>% #planted after M2
+seedlings_clean_M3.1 <- seedlings_clean%>% #planted after M2 or M3
   filter(DatePlanted > '2023-01-20')
 
 #creates a blank loop that can be repeated for each age class(M1, M2, etc)
@@ -202,71 +200,138 @@ M3.1_age <- loop_function(seedlings_clean_M3.1, seq(0, 1, .01), "TotalValue")%>%
   mutate(TotalValue = as.numeric(TotalValue))%>%
   mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
 
-
+####SURVIVORSHIP BY AGE CLASS####
 #displays the survivorship curve for each age class (M1, M2, M3 & M3.1)
 #y = raw numbers
-M1_age %>% #between 06/22/21 and 02/13/22: 236 days
+M1_age %>% #planted between 06/22/21 and 02/13/22: 236 days
   ggplot() +
   ggtitle("M1") +
   geom_step(aes(x = Ratio, y = TotalValue)) +
+  xlim(0, 1) +
   ylim(0, 510) +
-  geom_vline(xintercept = 100/236, linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/236), y=500) +
-  geom_vline(xintercept = 200/236, linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/236), y=500) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #700 days
+  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #800 days
+  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #900 days
+  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1000 days
+  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 1100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1100 days
+  geom_text(label="1100 days", x=(1100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 1200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1200 days
+  geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
   theme_classic()
 
-M2_age %>% #between 02/13/22 and 01/20/23: 341 days
+M2_age %>% #planted between 02/13/22 and 01/20/23: 341 days
   ggplot() +
   ggtitle("M2") +
   geom_step(aes(x = Ratio, y = TotalValue)) +
   ylim(0, 1159) +
-  geom_vline(xintercept = 100/341, linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/341), y=1100) +
-  geom_vline(xintercept = 200/341, linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/341), y=1100 ) +
-  geom_vline(xintercept = 300/341, linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/341), y=1100 ) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1150) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1050) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1150) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1050) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1150) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1050) +
+  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #700 days
+  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1150) +
+  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #800 days
+  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1050) +
+  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #900 days
+  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1150) +
+  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #1000 days
+  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1050) +
   theme_classic()
 
-M3_age %>% #between 01/20/23 and 12/13/23: 327 days
+M3_age %>% #planted between 01/20/23 and 12/13/23: 327 days
   ggplot() +
   ggtitle("M3") +
   geom_step(aes(x = Ratio, y = TotalValue)) +
+  xlim(0, 1) +
   ylim(0, 40) +
-  geom_vline(xintercept = 100/327, linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/327), y=40 ) +
-  geom_vline(xintercept = 200/327, linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/327), y=40 ) +
-  geom_vline(xintercept = 300/327, linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/327), y=40 ) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=40) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=35) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=40) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=35) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=40) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=35) +
   theme_classic()
 
 M3.1_age %>% #after 01/20/23 (last updated 04/19/2024): 455 days
   ggplot() +
   ggtitle("M3+") +
   geom_step(aes(x = Ratio, y = TotalValue)) +
+  xlim(0, 1) +
   ylim(0, 40) +
-  geom_vline(xintercept = 100/455, linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/455), y=1 ) +
-  geom_vline(xintercept = 200/455, linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/455), y=1 ) +
-  geom_vline(xintercept = 300/455, linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/455), y=1 ) +
-  geom_vline(xintercept = 400/455, linetype="dashed") + #400 days
-  geom_text(label="400 days", x=(400/455), y=1 ) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=40) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=35) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=40) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=35) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=40) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=35) +
   theme_classic()
 
 #y = percent
-M1_age %>% #changes y axis from TotalValue to PercValue
+M1_age %>%
   ggplot() +
   ggtitle("M1") +
   geom_step(aes(x = Ratio, y = PercValue)) +
   ylim(0, 1) +
-  geom_vline(xintercept = 100/236, linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/236), y=1) +
-  geom_vline(xintercept = 200/236, linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/236), y=1) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #700 days
+  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #800 days
+  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #900 days
+  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1000 days
+  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 1100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1100 days
+  geom_text(label="1100 days", x=(1100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 1200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1200 days
+  geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
   theme_classic()
 
 M2_age %>%
@@ -274,42 +339,65 @@ M2_age %>%
   ggtitle("M2") +
   geom_step(aes(x = Ratio, y = PercValue)) +
   ylim(0, 1) +
-  geom_vline(xintercept = 100/341, linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/341), y=1 ) +
-  geom_vline(xintercept = 200/341, linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/341), y=1 ) +
-  geom_vline(xintercept = 300/341, linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/341), y=1 ) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #700 days
+  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1) +
+  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #800 days
+  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #900 days
+  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=1) +
+  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M2$TimeAlive)), linetype="dashed") + #1000 days
+  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M2$TimeAlive))), y=0.8) +
   theme_classic()
 
-M3_age %>% #changes y axis from TotalValue to PercValue
+M3_age %>%
   ggplot() +
   ggtitle("M3") +
   geom_step(aes(x = Ratio, y = PercValue)) +
   ylim(0, 1) +
-  geom_vline(xintercept = 100/327, linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/327), y=1 ) +
-  geom_vline(xintercept = 200/327, linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/327), y=1 ) +
-  geom_vline(xintercept = 300/327, linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/327), y=1 ) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=1) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=0.9) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=1) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=0.9) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=1) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M3$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=0.9) +
   theme_classic()
 
-M3.1_age %>% #changes y axis from TotalValue to PercValue
+M3.1_age %>%
   ggplot() +
   ggtitle("M3+") +
   geom_step(aes(x = Ratio, y = PercValue)) +
   ylim(0, 1) +
-  geom_vline(xintercept = 100/455, linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/455), y=1 ) +
-  geom_vline(xintercept = 200/455, linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/455), y=1 ) +
-  geom_vline(xintercept = 300/455, linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/455), y=1 ) +
-  geom_vline(xintercept = 400/455, linetype="dashed") + #400 days
-  geom_text(label="400 days", x=(400/455), y=1 ) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=0.9) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=0.9) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=0.9) +
   theme_classic()
-
 
     
 ####WATERED####
