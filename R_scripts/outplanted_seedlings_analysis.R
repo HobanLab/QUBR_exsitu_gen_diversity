@@ -11,17 +11,67 @@ Today <- today()
 Monitor1Date <- dmy("13/02/2022")
 Monitor2Date <- dmy("20/01/2023")
 Monitor3Date <- dmy("13/12/2023")
+Monitor4Date <- dmy("23/11/2024")
 
 #imports Daniel's databases (2023 and 2024 tabs)
 outplanted_seedlings23 <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado_05_2024.xlsx - Datos_Campaña_Seimbra_2023.csv")
 outplanted_seedlings24 <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado_05_2024.xlsx - Datos_Campaña_Seimbra_2024.csv")
+outplanted_seedlings24.field <- read_csv("./data/QUBR Field Datasheets Nov 2024 - filled - OP Seedlings.csv")
 summary(outplanted_seedlings23)
 summary(outplanted_seedlings24)
+summary(outplanted_seedlings24.field)
 
 ####DATA CLEANING####
 #combines data from 2023 and 2024 tabs
 seedlings_combined <- bind_rows(outplanted_seedlings23, outplanted_seedlings24)
 summary(seedlings_combined)
+
+#adds new columns
+outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
+  add_column(Monitor4 = NA)%>%
+  add_column(Canopy_num = NA)%>%
+  add_column(Condition_num = NA)%>%
+  add_column(Height_num = NA)%>%
+  filter(!str_detect(Condition, 'dead'))%>%
+  
+#renames columns to match other datasets
+  mutate(Ranch=recode(Ranch, 'San Dio' = 'Rancho San Dionisio'))%>%
+  mutate(Ranch=recode(Ranch, 'Santo Do' = 'Santo Domingo'))%>%
+  mutate(Ranch=recode(Ranch, 'La Palapa' = 'La Rueda (Palapa)'))%>%
+  mutate(Ranch=recode(Ranch, 'Parque de Santiago' = 'Parque Ecológico Santiago'))%>%
+  mutate(Ranch=recode(Ranch, 'Santa Gertrudis (orchard)' = 'Santa Gertudris (Huerta)'))%>%
+  mutate(Ranch=recode(Ranch, 'Santa Gertrudis' = 'Santa Gertudris'))%>%
+  mutate(Ranch=recode(Ranch, 'Palo Verdal' = 'Palo Verdad'))%>%
+  
+ 
+#combines variables that are effectively the same
+  mutate(Height=recode(Height, 'above the knee' = 'above knee', 'above shoulders' = 'above shoulder'))%>%
+  mutate(Height=recode(Height, 'Dana height' = '65'))%>%
+  mutate(Monitor4=recode(Condition, 'the best' = 'Viva', 'great' = 'Viva', 'good' = 'Viva', 'fair' = 'Viva', 'poor' = 'Viva', 
+                                    'dead' = 'Muerta'))%>%
+
+#assigns numeric values to character variables
+  mutate(Condition_num=recode(Condition, 'dead' = '0',
+                                          'poor' = '0.25',
+                                          'fair' = '0.5',
+                                          'good' = '0.75',
+                                          'great' = '1', 'the best' = '1'))%>%
+  mutate(Canopy_num=recode(`Canopy cover`, 'full shade' = '0', 
+                                           'mostly shade' = '0.25', 
+                                           'partial shade' = '0.5', 
+                                           'half shade' = '0.75', 'half sun' = '0.75', 
+                                           'partial sun' = '0.25', 'patial shade' = '0.25', 
+                                           'mostly sun' = '0.5', 'mostly  sun' = '0.5', 
+                                           'full sun' = '1', 'total sun' = '1'))%>%
+#converts variables into numeric formats
+  mutate(Date = mdy(Date))%>%
+  mutate(Condition_num=as.numeric(Condition_num))%>%
+  mutate(Canopy_num=as.numeric(Canopy_num))
+    
+summary(outplanted_seedlings_nov24)
+unique(outplanted_seedlings_nov24$Height)
+unique(seedlings_clean$Ranch)
+
 
 #renames columns to simplified English, differentiates seed origin and seedling planted region
 seedlings_clean <- seedlings_combined%>%
@@ -39,8 +89,9 @@ seedlings_clean <- seedlings_combined%>%
   rename(Contact = 'Contacto')%>%
   rename(PlantedIn = 'Sembrado en:')%>%
   rename(Watered = 'Lluvia solida')%>%
-  rename(Monitor4 = 'Monitoreo 1 (__/__/__)')%>%
+  select(-'Monitoreo 1 (__/__/__)')%>%
   rename(OriginLabelAsh = 'Procedencia Etiqueta Ash Abril 2024')%>%
+  rename(`Metal tag ID` = 'Núm. Etiqueta')%>%
   mutate(Monitor1=recode(Monitor1, 'Perdida' = 'Muerta'))%>%#reclass Perdida (poor) as Muerta (dead)
 #calculate when a seedling died based on the last Monitoring date it was seen alive
   add_column(DateDied = NA)%>%
@@ -91,13 +142,28 @@ seedlings_clean <- seedlings_combined%>%
 
 #How many different lengths of time have individuals been alive for?
 
-unique(seedlings_clean$PotentialTimeAlive)
 #prioritize seedlings for visits while in Baja based on number of individuals at each ranch  
 priority_sites <- seedlings_clean%>%
   filter(Outcome == 'Alive')%>%
   group_by(PlantedReg, Ranch, N, W)%>%
   summarise(n())
   
+#Adding data from most recent monitoring (Nov 2024) to the overall dataset
+seedlings_clean_joined <- outplanted_seedlings_nov24%>%
+  select(Ranch, `Metal tag ID`, Monitor4)%>%
+  left_join(seedlings_clean, ., by = 'Metal tag ID')%>%
+  mutate(QualityControl = case_when(Ranch.x == Ranch.y~'y', 
+                                    Ranch.x != Ranch.y~'n'))%>%
+  mutate(Monitor4 = replace_na(Monitor4, 'Muerta'))
+
+seedlings_clean_joined%>%
+  
+  
+
+
+
+summary(seedlings_clean_joined)
+
 
 
 

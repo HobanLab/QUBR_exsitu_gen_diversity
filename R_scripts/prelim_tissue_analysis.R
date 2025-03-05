@@ -110,6 +110,14 @@ north_inds_to_sample <- sample(tissue_north$QUBR_ID, size = num_to_sample, repla
 
 east_inds_to_sample <- sample(tissue_east$QUBR_ID, size = num_to_sample, replace = F)
 
+#Filter east_inds to remove the individuals already sampled (in east_inds_to_sample)
+east_inds_extra <- tissue_east %>% filter(!QUBR_ID %in% east_inds_to_sample)
+
+#select 3 random individuals that have not already been sampled
+replacements_east <- sample_n(east_inds_extra, 3)
+
+
+
 #create dataset with only 600 chosen inds for extractions
 tissue_field_600_inds <- tissue_field_for_extraction %>%
   filter(QUBR_ID %in% tissue_west_and_NAs$QUBR_ID | QUBR_ID %in% north_inds_to_sample | QUBR_ID %in% east_inds_to_sample) 
@@ -142,3 +150,4 @@ tissue_field_data%>%
   ggplot() +
   geom_bar(aes(x = Region, fill = Region)) +
   theme_classic()
+
