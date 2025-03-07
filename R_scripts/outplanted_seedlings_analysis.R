@@ -8,15 +8,17 @@ library(chisq.posthoc.test)
 setwd("..")
 
 Today <- today()
-Monitor1Date <- dmy("13/02/2022")
-Monitor2Date <- dmy("20/01/2023")
-Monitor3Date <- dmy("13/12/2023")
-Monitor4Date <- dmy("23/11/2024")
+Monitor1Date <- ("13/02/2022")
+Monitor2Date <- ("20/01/2023")
+Monitor3Date <- ("13/12/2023")
+Monitor4Date <- ("23/11/2024")
 
-#imports Daniel's databases (2023 and 2024 tabs)
-outplanted_seedlings23 <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado_05_2024.xlsx - Datos_Campaña_Seimbra_2023.csv")
-outplanted_seedlings24 <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado_05_2024.xlsx - Datos_Campaña_Seimbra_2024.csv")
-outplanted_seedlings24.field <- read_csv("./data/QUBR Field Datasheets Nov 2024 - filled - OP Seedlings.csv")
+#imports databases (2023 and 2024 tabs, 2024 field work)
+outplanted_seedlings23 <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado_05_2024.xlsx - Datos_Campaña_Seimbra_2023 03_07_25.csv")
+outplanted_seedlings24 <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado_05_2024.xlsx - Datos_Campaña_Seimbra_2024 03_07_25.csv")
+outplanted_seedlings24.field <- read_csv("./data/QUBR Field Datasheets Nov 2024 - filled - OP Seedlings 03_07_25.csv")
+
+
 summary(outplanted_seedlings23)
 summary(outplanted_seedlings24)
 summary(outplanted_seedlings24.field)
@@ -25,53 +27,6 @@ summary(outplanted_seedlings24.field)
 #combines data from 2023 and 2024 tabs
 seedlings_combined <- bind_rows(outplanted_seedlings23, outplanted_seedlings24)
 summary(seedlings_combined)
-
-#adds new columns
-outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
-  add_column(Monitor4 = NA)%>%
-  add_column(Canopy_num = NA)%>%
-  add_column(Condition_num = NA)%>%
-  add_column(Height_num = NA)%>%
-  filter(!str_detect(Condition, 'dead'))%>%
-  
-#renames columns to match other datasets
-  mutate(Ranch=recode(Ranch, 'San Dio' = 'Rancho San Dionisio'))%>%
-  mutate(Ranch=recode(Ranch, 'Santo Do' = 'Santo Domingo'))%>%
-  mutate(Ranch=recode(Ranch, 'La Palapa' = 'La Rueda (Palapa)'))%>%
-  mutate(Ranch=recode(Ranch, 'Parque de Santiago' = 'Parque Ecológico Santiago'))%>%
-  mutate(Ranch=recode(Ranch, 'Santa Gertrudis (orchard)' = 'Santa Gertudris (Huerta)'))%>%
-  mutate(Ranch=recode(Ranch, 'Santa Gertrudis' = 'Santa Gertudris'))%>%
-  mutate(Ranch=recode(Ranch, 'Palo Verdal' = 'Palo Verdad'))%>%
-  
- 
-#combines variables that are effectively the same
-  mutate(Height=recode(Height, 'above the knee' = 'above knee', 'above shoulders' = 'above shoulder'))%>%
-  mutate(Height=recode(Height, 'Dana height' = '65'))%>%
-  mutate(Monitor4=recode(Condition, 'the best' = 'Viva', 'great' = 'Viva', 'good' = 'Viva', 'fair' = 'Viva', 'poor' = 'Viva', 
-                                    'dead' = 'Muerta'))%>%
-
-#assigns numeric values to character variables
-  mutate(Condition_num=recode(Condition, 'dead' = '0',
-                                          'poor' = '0.25',
-                                          'fair' = '0.5',
-                                          'good' = '0.75',
-                                          'great' = '1', 'the best' = '1'))%>%
-  mutate(Canopy_num=recode(`Canopy cover`, 'full shade' = '0', 
-                                           'mostly shade' = '0.25', 
-                                           'partial shade' = '0.5', 
-                                           'half shade' = '0.75', 'half sun' = '0.75', 
-                                           'partial sun' = '0.25', 'patial shade' = '0.25', 
-                                           'mostly sun' = '0.5', 'mostly  sun' = '0.5', 
-                                           'full sun' = '1', 'total sun' = '1'))%>%
-#converts variables into numeric formats
-  mutate(Date = mdy(Date))%>%
-  mutate(Condition_num=as.numeric(Condition_num))%>%
-  mutate(Canopy_num=as.numeric(Canopy_num))
-    
-summary(outplanted_seedlings_nov24)
-unique(outplanted_seedlings_nov24$Height)
-unique(seedlings_clean$Ranch)
-
 
 #renames columns to simplified English, differentiates seed origin and seedling planted region
 seedlings_clean <- seedlings_combined%>%
@@ -92,42 +47,30 @@ seedlings_clean <- seedlings_combined%>%
   select(-'Monitoreo 1 (__/__/__)')%>%
   rename(OriginLabelAsh = 'Procedencia Etiqueta Ash Abril 2024')%>%
   rename(`Metal tag ID` = 'Núm. Etiqueta')%>%
-  mutate(Monitor1=recode(Monitor1, 'Perdida' = 'Muerta'))%>%#reclass Perdida (poor) as Muerta (dead)
-#calculate when a seedling died based on the last Monitoring date it was seen alive
+  mutate(Monitor1=recode(Monitor1, 'Perdida' = 'Muerta'))%>% #reclass Perdida (poor) as Muerta (dead)
   add_column(DateDied = NA)%>%
-  mutate(DateDied = case_when(is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) ~ DatePlanted,
-
-                              Monitor1 == 'Nueva' & is.na(Monitor2) ~ DatePlanted,
-                              Monitor1 == 'Nueva' & Monitor2 == 'Muerta' ~ DatePlanted,
-                              
-                              Monitor1 == 'Muerta' ~ DatePlanted,
-                              
-                              Monitor1 == 'Viva' & Monitor2 == 'Muerta' ~'13/02/2022',
-                              
-                              Monitor2 == 'Viva' & is.na(Monitor3) ~ '20/01/2023',
-                              Monitor1 == 'Viva' & is.na(Monitor2) ~ '13/02/2022',
-                              Monitor2 == 'Nueva' & Monitor3 == 'Muerta' ~ DatePlanted,
-                              Monitor2 == 'Nueva' & is.na(Monitor3) ~ DatePlanted,
-                              Monitor2 == 'Viva' & Monitor3 == 'Muerta' ~ '20/01/2023'))%>%
-  add_column(Outcome = NA)%>%
+  filter(!str_detect(Ranch, "Arroyo:"))%>% #removes individuals from the Arroyo: El Palo Santo bc we didn't observe them in 2024 (they were fairly new)
   
+#calculate when a seedling died based on the last Monitoring date it was seen alive
+  mutate(DateDied = case_when(is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) | Monitor1 == 'Muerta' ~ DatePlanted,
+                              (Monitor1 == 'Nueva' | Monitor1 == 'Viva') & (is.na(Monitor2) | Monitor2 == 'Muerta') ~ Monitor1Date,
+                              (Monitor2 == 'Nueva' | Monitor2 == 'Viva') & (is.na(Monitor3) | Monitor3 == 'Muerta') ~ Monitor2Date))%>%
+                              
 #format date as DayMonthYear
+  add_column(Outcome = NA)%>%
   add_column(TimeAlive = NA)%>%
   add_column(RatioTimeAlive = NA)%>%
   add_column(PotentialTimeAlive = NA)%>%
   
   mutate(DateDied = dmy(DateDied))%>%
   mutate(DatePlanted = dmy(DatePlanted))%>%
+  mutate(DateDied = case_when(DateDied <= DatePlanted ~ DatePlanted, .default = DateDied))%>%
   mutate(RatioTimeAlive = dmy(RatioTimeAlive))%>%
   mutate(PotentialTimeAlive = dmy(PotentialTimeAlive))%>%
   mutate(Outcome = case_when(Monitor1 == 'Muerta' | Monitor2 == 'Muerta' | Monitor3 == 'Muerta' ~ 'Dead',
                              
                              Monitor3 == 'Nueva' | Monitor3 == 'Viva' ~ 'Alive',
-                             
-                             Monitor2 == 'Nueva' & is.na(Monitor3) ~ 'Presumed Dead',
-                             Monitor2 == 'Viva' & is.na(Monitor3) ~ 'Presumed Dead',
-                             is.na(Monitor2) & is.na(Monitor3) ~ 'Presumed Dead',
-                             is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) ~ 'Presumed Dead'
+                             is.na(Monitor1) | is.na(Monitor2) | is.na(Monitor3) ~ 'Presumed Dead'
                              ))%>%
   
 #calculate TimeAlive as difference between DatePlanted and DateDied
@@ -138,49 +81,119 @@ seedlings_clean <- seedlings_combined%>%
                                Outcome == 'Presumed Dead' ~ (DateDied - DatePlanted)))%>%
   mutate(RatioTimeAlive = (as.numeric(TimeAlive)) / (as.numeric(PotentialTimeAlive)))%>%
 #removes rows for individuals handed out at Festival 2023
-    filter(!str_detect(Ranch, "Festival"))
+  filter(!str_detect(Ranch, "Festival"))
 
-#How many different lengths of time have individuals been alive for?
 
+summary(seedlings_clean)
 #prioritize seedlings for visits while in Baja based on number of individuals at each ranch  
 priority_sites <- seedlings_clean%>%
   filter(Outcome == 'Alive')%>%
   group_by(PlantedReg, Ranch, N, W)%>%
   summarise(n())
+
+
+
+#adds new columns
+outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
+  add_column(Monitor4 = NA)%>%
+  add_column(Canopy_num = NA)%>%
+  add_column(Condition_num = NA)%>%
+  add_column(Height_num = NA)%>%
   
-#Adding data from most recent monitoring (Nov 2024) to the overall dataset
+  #renames columns to match other datasets
+  mutate(Ranch=recode(Ranch, 'San Dio' = 'Rancho San Dionisio'))%>%
+  mutate(Ranch=recode(Ranch, 'Santo Do' = 'Santo Domingo'))%>%
+  mutate(Ranch=recode(Ranch, 'La Palapa' = 'La Rueda (Palapa)'))%>%
+  mutate(Ranch=recode(Ranch, 'Parque de Santiago' = 'Parque Ecológico Santiago'))%>%
+  mutate(Ranch=recode(Ranch, 'Santa Gertrudis (orchard)' = 'Santa Gertudris (Huerta)'))%>%
+  mutate(Ranch=recode(Ranch, 'Santa Gertrudis' = 'Santa Gertudris'))%>%
+  mutate(Ranch=recode(Ranch, 'Palo Verdal' = 'Palo Verdad'))%>%
+  
+  
+  #combines variables that are effectively the same
+  mutate(Height=recode(Height, 'above the knee' = 'above knee', 'above shoulders' = 'above shoulder'))%>%
+  mutate(Height=recode(Height, 'Dana height' = '65'))%>%
+  mutate(Monitor4=recode(Condition, 'the best' = 'Viva', 'great' = 'Viva', 'good' = 'Viva', 'fair' = 'Viva', 'poor' = 'Viva', 
+                         'dead' = 'Muerta'))%>%
+  
+  #assigns numeric values to character variables
+  mutate(Condition_num=recode(Condition, 'dead' = '0',
+                              'poor' = '0.25',
+                              'fair' = '0.5',
+                              'good' = '0.75',
+                              'great' = '1', 'the best' = '1'))%>%
+  mutate(Canopy_num=recode(`Canopy cover`, 'full shade' = '0', 
+                           'mostly shade' = '0.25', 
+                           'partial shade' = '0.5', 
+                           'half shade' = '0.75', 'half sun' = '0.75', 
+                           'partial sun' = '0.25', 'patial shade' = '0.25', 
+                           'mostly sun' = '0.5', 'mostly  sun' = '0.5', 
+                           'full sun' = '1', 'total sun' = '1'))%>%
+  #converts variables into numeric formats
+  mutate(Date = mdy(Date))%>%
+  mutate(Condition_num=as.numeric(Condition_num))%>%
+  mutate(Canopy_num=as.numeric(Canopy_num))%>%
+  mutate(Monitor4 = replace_na(Monitor4, 'Muerta'))
+  
+  
+#Adding relevant data from most recent monitoring (Nov 2024) to the overall dataset
 seedlings_clean_joined <- outplanted_seedlings_nov24%>%
   select(Ranch, `Metal tag ID`, Monitor4)%>%
   left_join(seedlings_clean, ., by = 'Metal tag ID')%>%
+#Check that the ranch names match in both source databases
   mutate(QualityControl = case_when(Ranch.x == Ranch.y~'y', 
                                     Ranch.x != Ranch.y~'n'))%>%
-  mutate(Monitor4 = replace_na(Monitor4, 'Muerta'))
+#Adding to previous Outcome in seedlings_clean: 
+  mutate(Outcome = case_when((Monitor1 == 'Muerta' | Monitor2 == 'Muerta' | Monitor3 == 'Muerta' | Monitor4 == 'Muerta') ~ 'Dead',
+                             Monitor4 == 'Nueva' | Monitor4 == 'Viva' ~ 'Alive',
+                             is.na(Monitor4) ~ 'Presumed Dead'))%>%
+  
+#Adding to previous DateDied in seedlings_clean:   
+  mutate(DateDied = case_when(is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) & is.na(Monitor4) ~ DatePlanted,
+                              (Monitor1 == 'Muerta') ~ DatePlanted,
+                              (Monitor1 == 'Viva' | Monitor1 == 'Nueva') & (Monitor2 == 'Muerta' | is.na(Monitor2)) ~ dmy(Monitor1Date),
+                              (Monitor2 == 'Viva' | Monitor2 == 'Nueva') & (Monitor3 == 'Muerta' | is.na(Monitor3)) ~ dmy(Monitor2Date),
+                              #I thought the 3 lines above this would have carried over from the code for seedling_clean
+                              #but something must be overriding them
+                              (Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta' | is.na(Monitor4)) ~ dmy(Monitor3Date)))%>%
+  mutate(DateDied = case_when(DateDied <= DatePlanted ~ DatePlanted, .default = DateDied))%>%
+  mutate(TimeAlive = DateDied - DatePlanted)%>%
+  mutate(PotentialTimeAlive = Today - DatePlanted)%>% #days since it was first planted
+  mutate(TimeAlive = case_when(Outcome == 'Alive' ~ (Today - DatePlanted),
+                               Outcome == 'Dead' ~ (DateDied - DatePlanted),
+                               Outcome == 'Presumed Dead' ~ (DateDied - DatePlanted)))%>%
+  mutate(RatioTimeAlive = (as.numeric(TimeAlive)) / (as.numeric(PotentialTimeAlive)))
 
 seedlings_clean_joined%>%
-  
-  
+  filter(!`Metal tag ID` %in% seedlings_clean$`Metal tag ID`)
 
-
-
-summary(seedlings_clean_joined)
-
-
-
+#finding metal tag IDs that were observed twice
+seedlings_clean_joined%>%
+  group_by(`Metal tag ID`)%>%
+  summarize(n=n())%>%
+  filter(n>1)
+seedlings_clean%>%
+  group_by(`Metal tag ID`)%>%
+  summarize(n=n())%>%
+  filter(n>1)
+ #shows all of the information on the two metal tags that have duplicates
+temp <- seedlings_clean_joined%>%
+  filter(`Metal tag ID` %in% c('68', '318'))
 
 ####FOR LOOP: SURVIVORSHIP CURVE####
 #creating a df with increments of 1 day to represent how old a seedling could be
 df_age <- 
-  data.frame("Days"=seq(0, 1220, 1), "TotalAlive" = NA) 
+  data.frame("Days"=seq(0, 1350, 1), "TotalAlive" = NA) 
 
 #for loop: how many individuals were still alive at any given duration?
-#ALL
+#with Monitor4 added
 for (i in 1:nrow(df_age)) {
   Day <- df_age$Days[i] #df_age$Days is a vector (one column in this df)
-  Num_seedlings_alive <- sum(Day <= seedlings_clean$TimeAlive, na.rm = TRUE)
+  Num_seedlings_alive <- sum(Day <= seedlings_clean_joined$TimeAlive, na.rm = TRUE)
   #Day is a temporary object that holds the output of the day we are on in the iterative loop
   df_age$TotalAlive[i] <- paste0(Num_seedlings_alive)
   #fill one cell per iteration with the total number of seedlings alive by that day
-  }
+}
 
 #plot survivorship curve
 df_age_final <- df_age%>%
@@ -190,7 +203,10 @@ df_age_final <- df_age%>%
   
 df_age_final %>%
   ggplot(aes(x = Days, y = PercentAlive)) +
-  ggtitle("All") +
+  ggtitle("seedlings_clean_joined: all") +
+  xlab('Days alive') +
+  ylab('# of individuals') +
+  ylim(0, 1) +
   geom_step() +
   theme_classic()
 
@@ -203,7 +219,7 @@ df_age_ratio <- #creates a df that counts from 0 to 1, and with blank columns fo
 
 for (i in 1:nrow(df_age_ratio)) {#for loop fills in TotalValue column
   Ratio_Value <- df_age_ratio$Ratio[i]
-  ratio_hold <- sum(Ratio_Value <= seedlings_clean$RatioTimeAlive, na.rm = TRUE)
+  ratio_hold <- sum(Ratio_Value <= seedlings_clean_joined$RatioTimeAlive, na.rm = TRUE)
   df_age_ratio$TotalValue[i] <- as.numeric(ratio_hold)
 }
 
@@ -211,13 +227,23 @@ df_age_ratio_perc <- df_age_ratio%>%
   mutate(TotalValue = as.numeric(TotalValue))%>%
   mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
 
+
+#I used this figure for my RaMP presentation
 df_age_ratio %>% #curve shown with y = raw values
-  ggplot() +
+  ggplot()+
   geom_step(aes(x = Ratio, y = TotalValue)) +
+  ylim(0, 2000) +
+  xlab('Realized time alive / Potential time alive') +
+  ylab('# of individuals') +
+  ggtitle("seedlings_clean_joined: ratio") +
   theme_classic()
 df_age_ratio_perc %>% #curve shown with y = percentage
   ggplot() +
   geom_step(aes(x = Ratio, y = PercValue)) +
+  ylim(0, 1) +
+  xlab('Realized time alive / Potential time alive') +
+  ylab('% of individuals') +
+  ggtitle("seedlings_clean_joined: %") +
   theme_classic()
 
 ####CONVERTING FOR LOOP TO FUNCTION####
@@ -230,14 +256,15 @@ test_function <- function(sequence, fill_in){
 test_function("a", "b")
 
 #these are the age classes I want to define
-seedlings_clean_M1 <- seedlings_clean%>% #planted before M1
+seedlings_clean_M1 <- seedlings_clean_joined%>% #planted before M1
   filter(DatePlanted < '2022-02-13')
-seedlings_clean_M2 <- seedlings_clean%>% #planted between M1 & M2
+seedlings_clean_M2 <- seedlings_clean_joined%>% #planted between M1 & M2
   filter(DatePlanted < '2023-01-20', DatePlanted > '2022-02-13')
-seedlings_clean_M3 <- seedlings_clean%>% #planted between M2 & M3
+seedlings_clean_M3 <- seedlings_clean_joined%>% #planted between M2 & M3
   filter(DatePlanted < '2023-12-13', DatePlanted > '2023-01-20')
-seedlings_clean_M3.1 <- seedlings_clean%>% #planted after M2 or M3
-  filter(DatePlanted > '2023-01-20')
+#there have been seedlings planted between M3 and M4, but they have not been remonitored for M4 yet
+seedlings_clean_M4 <- seedlings_clean_joined%>% #planted between M3 and M4
+  filter(DatePlanted < '2024-11-23', DatePlanted > '2023-12-13')
 
 #creates a blank loop that can be repeated for each age class(M1, M2, etc)
 loop_function <- function(source, CustomSequence, fill_in){
@@ -262,12 +289,12 @@ M2_age <- loop_function(seedlings_clean_M2, seq(0, 1, .01), "TotalValue")%>%
 M3_age <- loop_function(seedlings_clean_M3, seq(0, 1, .01), "TotalValue")%>%
   mutate(TotalValue = as.numeric(TotalValue))%>%
   mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
-M3.1_age <- loop_function(seedlings_clean_M3.1, seq(0, 1, .01), "TotalValue")%>%
+M4_age <- loop_function(seedlings_clean_M4, seq(0, 1, .01), "TotalValue")%>%
   mutate(TotalValue = as.numeric(TotalValue))%>%
   mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
 
 ####SURVIVORSHIP BY AGE CLASS####
-#displays the survivorship curve for each age class (M1, M2, M3 & M3.1)
+#displays the survivorship curve for each age class (M1, M2, M3 & M4)
 #y = raw numbers
 M1_age %>% #planted between 06/22/21 and 02/13/22: 236 days
   ggplot() +
@@ -348,25 +375,25 @@ M3_age %>% #planted between 01/20/23 and 12/13/23: 327 days
   geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=35) +
   theme_classic()
 
-M3.1_age %>% #after 01/20/23 (last updated 04/19/2024): 455 days
+M4_age %>% #planted between 12/13/23 and 11/23/24 (346 days)
   ggplot() +
-  ggtitle("M3+") +
+  ggtitle("M4") +
   geom_step(aes(x = Ratio, y = TotalValue)) +
   xlim(0, 1) +
-  ylim(0, 40) +
-  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=40) +
-  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=35) +
-  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=40) +
-  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #400 days
-  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=35) +
-  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #500 days
-  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=40) +
-  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #600 days
-  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=35) +
-  theme_classic()
+  ylim(0, 1000) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=40) +
+  # geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #200 days
+  # geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=35) +
+  # geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #300 days
+  # geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=40) +
+  # geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #400 days
+  # geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=35) +
+  # geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #500 days
+  # geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=40) +
+  # geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #600 days
+  # geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=35) +
+    theme_classic()
 
 #y = percent
 M1_age %>%
@@ -446,23 +473,23 @@ M3_age %>%
   geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M3$TimeAlive))), y=0.9) +
   theme_classic()
 
-M3.1_age %>%
+M4_age %>%
   ggplot() +
-  ggtitle("M3+") +
+  ggtitle("M4") +
   geom_step(aes(x = Ratio, y = PercValue)) +
   ylim(0, 1) +
-  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=0.9) +
-  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #400 days
-  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=0.9) +
-  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #500 days
-  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M3.1$TimeAlive)), linetype="dashed") + #600 days
-  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M3.1$TimeAlive))), y=0.9) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=1) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=0.9) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=1) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=0.9) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=1) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M4$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M4$TimeAlive))), y=0.9) +
   theme_classic()
 
     
