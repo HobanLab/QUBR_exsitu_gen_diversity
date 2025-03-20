@@ -1,6 +1,6 @@
 rm(list=ls())
-setwd("..")
-
+getwd()
+setwd("C:/Users/DBarry/Desktop/GitHub/QUBR_exsitu_gen_diversity")
 library(tidyverse)
 library(ggplot2)
 library(dplyr)
@@ -43,7 +43,7 @@ tissue_data_clean <- tissue_data%>%
   rename(Weight = `Weight (g)`) %>% #rename weight column to remove units
   rename(QUBR_ID = `Accession ID`)%>%
   filter(str_detect(Color, "reen")) %>% #selects only colors named Green and green
-  filter(str_detect(Condition, "Good"))
+  filter(str_detect(Condition, "Good")) #selects all inds in Good condition
 
 tissue_field_data <- tissue_data_clean%>% #joins field data and tissue transfer data by QUBR_ID
   left_join(., field_data_clean, join_by(QUBR_ID==QUBR_ID))
@@ -132,10 +132,27 @@ top_100_for_extractions %>%
   geom_bar(aes(x = Region, fill = Region)) +
   theme_classic()
 
-# Bind the remaining inds on to this list so we can keep these 100 as the first extractions but then proceed semi randomly
+tissue_field_600_inds%>%
+  filter(QUBR_ID %in% top_100_for_extractions$QUBR_ID)
+
+
+#Bind the remaining inds on to this list so we can keep these 100 as the first extractions but then proceed semi randomly
 top_100_for_extractions %>%
   rbind(filter(tissue_field_600_inds, QUBR_ID %notin% top_100_for_extractions$QUBR_ID)) %>%
   write_csv(., "./data/600_inds_for_extractions.csv")
+
+#We realized that we were 1 ind short of 600 and looked for duplicates
+tissue_field_600_inds%>%
+  group_by(`QUBR_ID`)%>%
+  summarize(n=n())%>%
+  filter(n>1)
+
+tissue_field_600_inds%>%
+  filter(QUBR_ID == 'QUBR_2022_0025')
+#found one duplicate, the error was already corrected in the original database
+#The second individual should have been QUBR_2022_0225
+#So, we are adding that individual to the bottom of this .csv and extracting it
+
 
 
 # Dana making graphs to show Daniel 9/16/24

@@ -1,11 +1,12 @@
 ####SET UP####
+rm(list=ls())
 library(tidyverse)
 library(ggplot2)
 library(dplyr)
 library(tibble)
 library(lubridate)
 library(chisq.posthoc.test)
-setwd("..")
+setwd("C:/Users/DBarry/Desktop/GitHub/QUBR_exsitu_gen_diversity")
 
 Today <- today()
 Monitor1Date <- ("13/02/2022")
@@ -13,20 +14,16 @@ Monitor2Date <- ("20/01/2023")
 Monitor3Date <- ("13/12/2023")
 Monitor4Date <- ("23/11/2024")
 
-#imports databases (2023 and 2024 tabs, 2024 field work)
+#imports databases (2023 & 2024 tabs, 2024 field work)
 outplanted_seedlings23 <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado_05_2024.xlsx - Datos_Campaña_Seimbra_2023 03_07_25.csv")
-outplanted_seedlings24 <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado_05_2024.xlsx - Datos_Campaña_Seimbra_2024 03_07_25.csv")
+outplanted_seedlings24 <- read_csv("./data/Datos de Siembra en Ranchos_Actualizado_05_2024.xlsx - Datos_Campaña_Seimbra_2024 03_07_25.csv")%>%
+  mutate('Núm. Etiqueta' = as.character('Núm. Etiqueta')) #interpret MetalTagID as a character, not numeric, because some inds have an A & B
 outplanted_seedlings24.field <- read_csv("./data/QUBR Field Datasheets Nov 2024 - filled - OP Seedlings 03_07_25.csv")
 
 
-summary(outplanted_seedlings23)
-summary(outplanted_seedlings24)
-summary(outplanted_seedlings24.field)
-
 ####DATA CLEANING####
-#combines data from 2023 and 2024 tabs
+#combines data from Daniel's 2023 and 2024 tabs
 seedlings_combined <- bind_rows(outplanted_seedlings23, outplanted_seedlings24)
-summary(seedlings_combined)
 
 #renames columns to simplified English, differentiates seed origin and seedling planted region
 seedlings_clean <- seedlings_combined%>%
@@ -44,14 +41,14 @@ seedlings_clean <- seedlings_combined%>%
   rename(Contact = 'Contacto')%>%
   rename(PlantedIn = 'Sembrado en:')%>%
   rename(Watered = 'Lluvia solida')%>%
-  select(-'Monitoreo 1 (__/__/__)')%>%
+  select(-'Monitoreo 1 (__/__/__)')%>% #remove the placeholder column in Daniel's 2024 datasheet for the monitoring we did in Nov 2024
   rename(OriginLabelAsh = 'Procedencia Etiqueta Ash Abril 2024')%>%
   rename(`Metal tag ID` = 'Núm. Etiqueta')%>%
   mutate(Monitor1=recode(Monitor1, 'Perdida' = 'Muerta'))%>% #reclass Perdida (poor) as Muerta (dead)
   add_column(DateDied = NA)%>%
-  filter(!str_detect(Ranch, "Arroyo:"))%>% #removes individuals from the Arroyo: El Palo Santo bc we didn't observe them in 2024 (they were fairly new)
+  filter(!str_detect(Ranch, "Arroyo:"))%>% #removes individuals from the Arroyo: El Palo Santo for analysis bc we didn't observe them in 2024 (they were fairly new)
   
-#calculate when a seedling died based on the last Monitoring date it was seen alive
+#calculate when a seedling died based on when it was last positively observed
   mutate(DateDied = case_when(is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) | Monitor1 == 'Muerta' ~ DatePlanted,
                               (Monitor1 == 'Nueva' | Monitor1 == 'Viva') & (is.na(Monitor2) | Monitor2 == 'Muerta') ~ Monitor1Date,
                               (Monitor2 == 'Nueva' | Monitor2 == 'Viva') & (is.na(Monitor3) | Monitor3 == 'Muerta') ~ Monitor2Date))%>%
@@ -61,14 +58,17 @@ seedlings_clean <- seedlings_combined%>%
   add_column(TimeAlive = NA)%>%
   add_column(RatioTimeAlive = NA)%>%
   add_column(PotentialTimeAlive = NA)%>%
-  
   mutate(DateDied = dmy(DateDied))%>%
   mutate(DatePlanted = dmy(DatePlanted))%>%
+  
+#If TimeAlive is negative because DatePlanted occurs after DateDied, use DatePlanted
+#Otherwise default to using DateDied
   mutate(DateDied = case_when(DateDied <= DatePlanted ~ DatePlanted, .default = DateDied))%>%
   mutate(RatioTimeAlive = dmy(RatioTimeAlive))%>%
   mutate(PotentialTimeAlive = dmy(PotentialTimeAlive))%>%
+  
+#Calculate whether an ind is alive base on the most recent positive observation
   mutate(Outcome = case_when(Monitor1 == 'Muerta' | Monitor2 == 'Muerta' | Monitor3 == 'Muerta' ~ 'Dead',
-                             
                              Monitor3 == 'Nueva' | Monitor3 == 'Viva' ~ 'Alive',
                              is.na(Monitor1) | is.na(Monitor2) | is.na(Monitor3) ~ 'Presumed Dead'
                              ))%>%
@@ -83,16 +83,13 @@ seedlings_clean <- seedlings_combined%>%
 #removes rows for individuals handed out at Festival 2023
   filter(!str_detect(Ranch, "Festival"))
 
-
-summary(seedlings_clean)
-#prioritize seedlings for visits while in Baja based on number of individuals at each ranch  
+#Decide priority sites to visit in Baja based on number of potentially living individuals at each ranch  
 priority_sites <- seedlings_clean%>%
   filter(Outcome == 'Alive')%>%
   group_by(PlantedReg, Ranch, N, W)%>%
   summarise(n())
 
-
-
+unique(outplanted_seedlings_nov24$Height)
 #adds new columns
 outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
   add_column(Monitor4 = NA)%>%
@@ -100,7 +97,7 @@ outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
   add_column(Condition_num = NA)%>%
   add_column(Height_num = NA)%>%
   
-  #renames columns to match other datasets
+#renames columns to match previous data
   mutate(Ranch=recode(Ranch, 'San Dio' = 'Rancho San Dionisio'))%>%
   mutate(Ranch=recode(Ranch, 'Santo Do' = 'Santo Domingo'))%>%
   mutate(Ranch=recode(Ranch, 'La Palapa' = 'La Rueda (Palapa)'))%>%
@@ -109,36 +106,67 @@ outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
   mutate(Ranch=recode(Ranch, 'Santa Gertrudis' = 'Santa Gertudris'))%>%
   mutate(Ranch=recode(Ranch, 'Palo Verdal' = 'Palo Verdad'))%>%
   
+  #combines equivalent variables
+  mutate(Monitor4=recode(Condition, 'the best' = 'Viva','great' = 'Viva', 'good' = 'Viva', 'fair' = 'Viva', 'poor' = 'Viva', 
+                                    'dead' = 'Muerta'))%>%
+  mutate(Condition=recode(Condition, 'the best' = 'great'))%>%
+  mutate(Height=recode(Height, 'above the knee' = 'above knee',
+                               'above shoulders' = 'above shoulder',
+                               'taller than Daniel' = 'taller than Dana',
+                               'mid hip' = 'hip',
+                               'low hip' = 'below hip'))%>%
+  mutate(`Canopy cover`=recode(`Canopy cover`, 'patial shade' = 'partial shade',
+                                               'mostly  sun' = 'mostly sun',
+                                               'total sun' = 'full sun'))%>%
   
-  #combines variables that are effectively the same
-  mutate(Height=recode(Height, 'above the knee' = 'above knee', 'above shoulders' = 'above shoulder'))%>%
-  mutate(Height=recode(Height, 'Dana height' = '65'))%>%
-  mutate(Monitor4=recode(Condition, 'the best' = 'Viva', 'great' = 'Viva', 'good' = 'Viva', 'fair' = 'Viva', 'poor' = 'Viva', 
-                         'dead' = 'Muerta'))%>%
-  
-  #assigns numeric values to character variables
-  mutate(Condition_num=recode(Condition, 'dead' = '0',
+  #assigns numeric values to continuous variables
+  mutate(Condition_num=recode(Condition, 
+                              'dead' = '0',
                               'poor' = '0.25',
                               'fair' = '0.5',
                               'good' = '0.75',
-                              'great' = '1', 'the best' = '1'))%>%
-  mutate(Canopy_num=recode(`Canopy cover`, 'full shade' = '0', 
-                           'mostly shade' = '0.25', 
-                           'partial shade' = '0.5', 
-                           'half shade' = '0.75', 'half sun' = '0.75', 
-                           'partial sun' = '0.25', 'patial shade' = '0.25', 
-                           'mostly sun' = '0.5', 'mostly  sun' = '0.5', 
-                           'full sun' = '1', 'total sun' = '1'))%>%
-  #converts variables into numeric formats
+                              'great' = '1'))%>%
+  mutate(Canopy_num=recode(`Canopy cover`, 
+                           'full shade' = '0', 
+                           'mostly shade' = '0.25', 'partial sun' = '0.25',
+                           'half shade' = '0.5', 'half sun' = '0.5', 
+                           'partial shade' = '0.75', 'mostly sun' = '0.75', 
+                           'full sun' = '1'))%>%
+  mutate(Height_num=recode(Height,
+                           'N/A' = '0',
+                           'below ankle' = '2',
+                           'ankle' = '4',
+                           'above ankle' = '9',
+                           'mid shin' = '14',
+                           'below knee' = '17',
+                           'knee' = '20',
+                           'above knee' = '25',
+                           'below hip'= '31',
+                           'hip' = '36',
+                           'above hip' = '40',
+                           'mid torso' = '46',
+                           'below shoulders' = '51',
+                           'shoulder' = '56',
+                           'above shoulder' = '60',
+                           'Dana height' = '65',
+                           'taller than Dana' = '75',
+                           '1.5 Daniels' = '102',
+                           '2 Daniels' = '136'))%>%
+  
+  
+#converts variables into numeric so they can do math
   mutate(Date = mdy(Date))%>%
   mutate(Condition_num=as.numeric(Condition_num))%>%
   mutate(Canopy_num=as.numeric(Canopy_num))%>%
-  mutate(Monitor4 = replace_na(Monitor4, 'Muerta'))
+  mutate(Height_num=as.numeric(Height_num))%>%
+  mutate(Monitor4 = replace_na(Monitor4, 'Muerta'))%>%
+  mutate(`Metal tag ID` = as.character(`Metal tag ID`))
   
-  
-#Adding relevant data from most recent monitoring (Nov 2024) to the overall dataset
+unique(outplanted_seedlings_nov24$Height)
+
+#Adding relevant data from most recent monitoring (Nov 2024) to the pre-existing data
 seedlings_clean_joined <- outplanted_seedlings_nov24%>%
-  select(Ranch, `Metal tag ID`, Monitor4)%>%
+  select(Ranch, `Metal tag ID`, Monitor4)%>% #these are the only parts we care about
   left_join(seedlings_clean, ., by = 'Metal tag ID')%>%
 #Check that the ranch names match in both source databases
   mutate(QualityControl = case_when(Ranch.x == Ranch.y~'y', 
@@ -148,17 +176,18 @@ seedlings_clean_joined <- outplanted_seedlings_nov24%>%
                              Monitor4 == 'Nueva' | Monitor4 == 'Viva' ~ 'Alive',
                              is.na(Monitor4) ~ 'Presumed Dead'))%>%
   
-#Adding to previous DateDied in seedlings_clean:   
+#Adding to previous DateDied in seedlings_clean:
+  #DateDied is calculated based on last positive observation
   mutate(DateDied = case_when(is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) & is.na(Monitor4) ~ DatePlanted,
                               (Monitor1 == 'Muerta') ~ DatePlanted,
                               (Monitor1 == 'Viva' | Monitor1 == 'Nueva') & (Monitor2 == 'Muerta' | is.na(Monitor2)) ~ dmy(Monitor1Date),
                               (Monitor2 == 'Viva' | Monitor2 == 'Nueva') & (Monitor3 == 'Muerta' | is.na(Monitor3)) ~ dmy(Monitor2Date),
-                              #I thought the 3 lines above this would have carried over from the code for seedling_clean
-                              #but something must be overriding them
                               (Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta' | is.na(Monitor4)) ~ dmy(Monitor3Date)))%>%
+  #If TimeAlive is negative because DatePlanted occurs after DateDied, use DatePlanted; otherwise default to DateDied
   mutate(DateDied = case_when(DateDied <= DatePlanted ~ DatePlanted, .default = DateDied))%>%
   mutate(TimeAlive = DateDied - DatePlanted)%>%
   mutate(PotentialTimeAlive = Today - DatePlanted)%>% #days since it was first planted
+  #TimeAlive is calculated based on outcome and time betweeen DatePlanted &  DateDied
   mutate(TimeAlive = case_when(Outcome == 'Alive' ~ (Today - DatePlanted),
                                Outcome == 'Dead' ~ (DateDied - DatePlanted),
                                Outcome == 'Presumed Dead' ~ (DateDied - DatePlanted)))%>%
@@ -166,8 +195,8 @@ seedlings_clean_joined <- outplanted_seedlings_nov24%>%
 
 seedlings_clean_joined%>%
   filter(!`Metal tag ID` %in% seedlings_clean$`Metal tag ID`)
-
-#finding metal tag IDs that were observed twice
+unique(outplanted_seedlings_nov24$Height_num)
+#find the Metal Tag IDs that were recorded twice
 seedlings_clean_joined%>%
   group_by(`Metal tag ID`)%>%
   summarize(n=n())%>%
@@ -194,6 +223,21 @@ for (i in 1:nrow(df_age)) {
   df_age$TotalAlive[i] <- paste0(Num_seedlings_alive)
   #fill one cell per iteration with the total number of seedlings alive by that day
 }
+#how many seedlings are alive after 1 year?
+num_alive_1yr <- seedlings_clean_joined%>%
+  filter((TimeAlive>=365 & PotentialTimeAlive>=365) | (TimeAlive<365 & RatioTimeAlive==1))%>%
+  nrow()
+
+#how many seedlings are alive after 2 years?
+num_alive_2yr <- seedlings_clean_joined%>%
+  filter((TimeAlive>=730 & PotentialTimeAlive>=730) | (TimeAlive<730 & RatioTimeAlive==1))%>%
+  nrow()
+
+#perc alive after 1 year
+num_alive_1yr/nrow(seedlings_clean_joined)
+
+#perc of inds alive at 1yr that are also alive at 2yr
+num_alive_2yr/num_alive_1yr
 
 #plot survivorship curve
 df_age_final <- df_age%>%
