@@ -8,7 +8,8 @@ library(lubridate)
 library(chisq.posthoc.test)
 setwd("C:/Users/DBarry/Desktop/GitHub/QUBR_exsitu_gen_diversity")
 
-Today <- today()
+#Today <- (today())
+Today <- dmy("24/11/2024")
 Monitor1Date <- ("13/02/2022")
 Monitor2Date <- ("20/01/2023")
 Monitor3Date <- ("13/12/2023")
@@ -89,7 +90,6 @@ priority_sites <- seedlings_clean%>%
   group_by(PlantedReg, Ranch, N, W)%>%
   summarise(n())
 
-unique(outplanted_seedlings_nov24$Height)
 #adds new columns
 outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
   add_column(Monitor4 = NA)%>%
@@ -134,24 +134,24 @@ outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
                            'full sun' = '1'))%>%
   mutate(Height_num=recode(Height,
                            'N/A' = '0',
-                           'below ankle' = '2',
-                           'ankle' = '4',
-                           'above ankle' = '9',
-                           'mid shin' = '14',
-                           'below knee' = '17',
-                           'knee' = '20',
-                           'above knee' = '25',
-                           'below hip'= '31',
-                           'hip' = '36',
-                           'above hip' = '40',
-                           'mid torso' = '46',
-                           'below shoulders' = '51',
-                           'shoulder' = '56',
-                           'above shoulder' = '60',
-                           'Dana height' = '65',
-                           'taller than Dana' = '75',
-                           '1.5 Daniels' = '102',
-                           '2 Daniels' = '136'))%>%
+                           'below ankle' = '5',
+                           'ankle' = '10',
+                           'above ankle' = '23',
+                           'mid shin' = '36',
+                           'below knee' = '43',
+                           'knee' = '51',
+                           'above knee' = '64',
+                           'below hip'= '79',
+                           'hip' = '91',
+                           'above hip' = '102',
+                           'mid torso' = '117',
+                           'below shoulders' = '130',
+                           'shoulder' = '142',
+                           'above shoulder' = '152',
+                           'Dana height' = '165',
+                           'taller than Dana' = '191',
+                           '1.5 Daniels' = '258',
+                           '2 Daniels' = '344'))%>%
   
   
 #converts variables into numeric so they can do math
@@ -162,7 +162,6 @@ outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
   mutate(Monitor4 = replace_na(Monitor4, 'Muerta'))%>%
   mutate(`Metal tag ID` = as.character(`Metal tag ID`))
   
-unique(outplanted_seedlings_nov24$Height)
 
 #Adding relevant data from most recent monitoring (Nov 2024) to the pre-existing data
 seedlings_clean_joined <- outplanted_seedlings_nov24%>%
@@ -195,7 +194,7 @@ seedlings_clean_joined <- outplanted_seedlings_nov24%>%
 
 seedlings_clean_joined%>%
   filter(!`Metal tag ID` %in% seedlings_clean$`Metal tag ID`)
-unique(outplanted_seedlings_nov24$Height_num)
+
 #find the Metal Tag IDs that were recorded twice
 seedlings_clean_joined%>%
   group_by(`Metal tag ID`)%>%
@@ -205,7 +204,7 @@ seedlings_clean%>%
   group_by(`Metal tag ID`)%>%
   summarize(n=n())%>%
   filter(n>1)
- #shows all of the information on the two metal tags that have duplicates
+#shows all of the information on the two metal tags that have duplicates
 temp <- seedlings_clean_joined%>%
   filter(`Metal tag ID` %in% c('68', '318'))
 
@@ -336,6 +335,49 @@ M3_age <- loop_function(seedlings_clean_M3, seq(0, 1, .01), "TotalValue")%>%
 M4_age <- loop_function(seedlings_clean_M4, seq(0, 1, .01), "TotalValue")%>%
   mutate(TotalValue = as.numeric(TotalValue))%>%
   mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
+
+####VISUALIZING OUTLIERS
+
+#Scatter plot: Height & Condition
+outplanted_seedlings_nov24%>%
+  filter(!str_detect(`Height_num`, "N/A"))%>%
+  ggplot() +
+  ggtitle("Height & Condition") +
+  geom_point(aes(x = Height_num, y = Condition_num)) +
+  xlim(0, 350) +
+  ylim(0, 1) +
+  xlab("Height (cm)") +
+  ylab("Condition") +
+  theme_classic()
+
+#Box plot: Height & Condition
+outplanted_seedlings_nov24%>%
+  mutate(`Condition_num` = as.factor(`Condition_num`))%>%
+  filter(!str_detect(`Height_num`, "N/A"))%>%
+  ggplot() +
+  ggtitle("Height & Condition") +
+  geom_boxplot(aes(x = Condition_num, y = Height_num)) +
+  geom_jitter(aes(x = Condition_num, y = Height_num)) +
+  xlab("Condition") +
+  ylab("Height (cm)") +
+  theme_classic()
+  
+
+#Box plot: Height & Ranch
+outplanted_seedlings_nov24%>%
+  mutate(Ranch=recode(Ranch, 'La Rueda (Palapa)' = 'La Rueda'))%>% #combines the two Ranches that are both at La Rueda
+  filter(!str_detect(`Height_num`, "N/A"))%>%
+  ggplot() +
+  ggtitle("Height & Ranch") +
+  geom_boxplot(aes(x = Ranch, y = Height_num, fill = Region)) +
+  geom_jitter(aes(x = Ranch, y = Height_num)) +
+  facet_wrap(~Region, dir = "h") +
+  ylim(0, 350) +
+  xlab("Ranch") +
+  ylab("Height (cm)") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90))
+
 
 ####SURVIVORSHIP BY AGE CLASS####
 #displays the survivorship curve for each age class (M1, M2, M3 & M4)
