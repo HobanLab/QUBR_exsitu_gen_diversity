@@ -47,7 +47,7 @@ seedlings_clean <- seedlings_combined%>%
   rename(OriginLabelAsh = 'Procedencia Etiqueta Ash Abril 2024')%>%
   rename(`Metal tag ID` = 'Núm. Etiqueta')%>%
   mutate(Monitor1=recode(Monitor1, 'Perdida' = 'Muerta'))%>% #reclass Perdida (lost) as Muerta (dead)
-  add_column(DateDied = NA)%>%
+  #add_column(DateDied = NA)%>%
   filter(!str_detect(Ranch, "Arroyo:"))%>% #removes individuals from the Arroyo: El Palo Santo for analysis bc we didn't observe them in 2024 (they were fairly new)
 
 #calculate when a seedling died based on when it was last positively observed
@@ -82,8 +82,7 @@ seedlings_clean <- seedlings_combined%>%
                                Outcome == 'Presumed Dead' ~ (DateDied - DatePlanted)))%>%
   mutate(RatioTimeAlive = (as.numeric(TimeAlive)) / (as.numeric(PotentialTimeAlive)))%>%
 #removes rows for individuals handed out at Festival 2023
-  filter(!str_detect(Ranch, "Festival"))%>%
-  mutate(LastObservedDateM3 = LastObservedDateM3)
+  filter(!str_detect(Ranch, "Festival"))
 
 #Decide priority sites to visit in Baja based on number of potentially living individuals at each ranch  
 priority_sites <- seedlings_clean%>%
@@ -168,12 +167,9 @@ outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
 
 #Adding relevant data from most recent monitoring (Nov 2024) to the pre-existing data
 seedlings_clean_joined <- outplanted_seedlings_nov24%>%
-  select(Ranch, `Metal tag ID`, Monitor4)%>% #these are the only parts we care about
+  select(Ranch, `Metal tag ID`, Monitor4)%>% #these are the only columns we need to carry over
   left_join(seedlings_clean, ., by = 'Metal tag ID')%>%
-#Check that the ranch names match in both source databases
-  #I can remove this section now
-  #mutate(QualityControl = case_when(Ranch.x == Ranch.y~'y', 
-  #                                  Ranch.x != Ranch.y~'n'))%>%
+
 #Adding to previous Outcome in seedlings_clean: 
   mutate(Outcome = case_when((Monitor1 == 'Muerta' | Monitor2 == 'Muerta' | Monitor3 == 'Muerta' | Monitor4 == 'Muerta') ~ 'Dead',
                              Monitor4 == 'Nueva' | Monitor4 == 'Viva' ~ 'Alive',
@@ -199,19 +195,6 @@ seedlings_clean_joined <- outplanted_seedlings_nov24%>%
 
 seedlings_clean_joined%>%
   filter(!`Metal tag ID` %in% seedlings_clean$`Metal tag ID`)
-
-#find the Metal Tag IDs that were recorded twice
-seedlings_clean_joined%>%
-  group_by(`Metal tag ID`)%>%
-  summarize(n=n())%>%
-  filter(n>1)
-seedlings_clean%>%
-  group_by(`Metal tag ID`)%>%
-  summarize(n=n())%>%
-  filter(n>1)
-#shows all of the information on the two metal tags that have duplicates
-temp <- seedlings_clean_joined%>%
-  filter(`Metal tag ID` %in% c('68', '318'))
 
 ####FOR LOOP: SURVIVORSHIP CURVE####
 #creating a df with increments of 1 day to represent how old a seedling could be
@@ -285,7 +268,7 @@ df_age_ratio %>% #curve shown with y = raw values
   ylim(0, 2000) +
   xlab('Realized time alive / Potential time alive') +
   ylab('# of individuals') +
-  ggtitle("seedlings_clean_joined: ratio") +
+  ggtitle("seedlings_clean_joined: #") +
   theme_classic()
 df_age_ratio_perc %>% #curve shown with y = percentage
   ggplot() +
@@ -343,7 +326,7 @@ M4_age <- loop_function(seedlings_clean_M4, seq(0, 1, .01), "TotalValue")%>%
   mutate(TotalValue = as.numeric(TotalValue))%>%
   mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
 
-####VISUALIZING OUTLIERS
+####VISUALIZING OUTLIERS####
 
 #Scatter plot: Height & Condition
 outplanted_seedlings_nov24%>%
@@ -363,13 +346,12 @@ outplanted_seedlings_nov24%>%
   filter(!str_detect(`Height_cm`, "N/A"))%>%
   ggplot() +
   ggtitle("Height & Condition") +
-  geom_boxplot(aes(x = Condition_num, y = Height_cm)) +
+  geom_boxplot(aes(x = Condition_num, y = Height_cm), outlier.shape = NA) +
   geom_jitter(aes(x = Condition_num, y = Height_cm)) +
   xlab("Condition") +
   ylab("Height (cm)") +
   theme_classic()
   
-
 #Box plot: Height & Ranch
 outplanted_seedlings_nov24%>%
   mutate(Ranch=recode(Ranch, 'La Rueda (Palapa)' = 'La Rueda'))%>% #combines the two Ranches that are both at La Rueda
@@ -384,7 +366,6 @@ outplanted_seedlings_nov24%>%
   ylab("Height (cm)") +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 90))
-
 
 ####SURVIVORSHIP BY AGE CLASS####
 #displays the survivorship curve for each age class (M1, M2, M3 & M4)
@@ -727,3 +708,18 @@ chisq.posthoc.test(watered_data)
 
 #export .csv to make Google Map of sites
 #write.csv(priority_sites, "priority_sites.csv")
+
+
+####TROUBLESHOOTING####
+#find the Metal Tag IDs that were recorded twice
+seedlings_clean_joined%>%
+  group_by(`Metal tag ID`)%>%
+  summarize(n=n())%>%
+  filter(n>1)
+seedlings_clean%>%
+  group_by(`Metal tag ID`)%>%
+  summarize(n=n())%>%
+  filter(n>1)
+#shows all of the information on the two metal tags that have duplicates
+temp <- seedlings_clean_joined%>%
+  filter(`Metal tag ID` %in% c('68', '318'))
