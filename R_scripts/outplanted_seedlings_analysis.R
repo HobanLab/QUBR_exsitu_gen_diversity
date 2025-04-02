@@ -5,8 +5,10 @@ library(ggplot2)
 library(dplyr)
 library(tibble)
 library(lubridate)
-library(chisq.posthoc.test)
-setwd("C:/Users/DBarry/Desktop/GitHub/QUBR_exsitu_gen_diversity")
+#library(chisq.posthoc.test)
+#setwd("C:/Users/DBarry/Desktop/GitHub/QUBR_exsitu_gen_diversity")
+
+setwd("../")
 
 Monitor1Date <- dmy("13/02/2022")
 Monitor2Date <- dmy("20/01/2023")
@@ -27,10 +29,10 @@ outplanted_seedlings24.field <- read_csv("./data/QUBR Field Datasheets Nov 2024 
 #combines data from Daniel's 2023 and 2024 tabs
 seedlings_combined <- bind_rows(outplanted_seedlings23, outplanted_seedlings24)
 
-#renames columns to simplified English, differentiates seed origin and seedling planted region
+#renames columns to simplified English, differentiates seed origin and seedling planted region --> Ash note: this does not all need to be separate line of the pipe, example in Town
 seedlings_clean <- seedlings_combined%>%
-  rename(Name = 'Nombre')%>%
-  rename(Town = 'Localidad')%>%
+  rename(Name = 'Nombre', 
+         Town = 'Localidad')%>%
   rename(Ranch = 'Rancho, Lugar o Sitio')%>%
   rename(Monitor1 = '13/02/2022 - Monitoreo 1')%>%
   rename(Monitor2 = '20/01/2023 Monitoreo 2')%>%
@@ -46,7 +48,7 @@ seedlings_clean <- seedlings_combined%>%
   select(-'Monitoreo 1 (__/__/__)')%>% #remove the placeholder column in Daniel's 2024 datasheet for the monitoring we did in Nov 2024
   rename(OriginLabelAsh = 'Procedencia Etiqueta Ash Abril 2024')%>%
   rename(`Metal tag ID` = 'Núm. Etiqueta')%>%
-  mutate(Monitor1=recode(Monitor1, 'Perdida' = 'Muerta'))%>% #reclass Perdida (lost) as Muerta (dead)
+  mutate(Monitor1=recode(Monitor1, 'Perdida' = 'Muerta'))%>% #reclass Perdida (lost) as Muerta (dead) --> Ash note: for posterity this needs to be applied to all Monitor cols --> to do this we can use mutate(across()) --> Ash will go over with Dana
   #add_column(DateDied = NA)%>%
   filter(!str_detect(Ranch, "Arroyo:"))%>% #removes individuals from the Arroyo: El Palo Santo for analysis bc we didn't observe them in 2024 (they were fairly new)
 
@@ -56,24 +58,22 @@ seedlings_clean <- seedlings_combined%>%
                               (Monitor2 == 'Nueva' | Monitor2 == 'Viva') & (is.na(Monitor3) | Monitor3 == 'Muerta') ~ Monitor2Date))%>%
   
                                 
-#format date as DayMonthYear
+#format date as DayMonthYear --> Ash note: in dplyr, we don't really ever need to "add columns" because mutate achieves the same thing, also this comment only applies to that mutate at the bottom, not to the add columns so it should go next to the mutate instead of above this block of code
   add_column(Outcome = NA)%>%
   add_column(TimeAlive = NA)%>%
   add_column(RatioTimeAlive = NA)%>%
   add_column(PotentialTimeAlive = NA)%>%
   mutate(DatePlanted = dmy(DatePlanted))%>%
   
-#If TimeAlive is negative because DatePlanted occurs after DateDied, use DatePlanted
-#Otherwise default to using DateDied
-  mutate(DateDied = case_when(DateDied <= DatePlanted ~ DatePlanted, .default = DateDied))%>%
-  mutate(RatioTimeAlive = dmy(RatioTimeAlive))%>%
-  mutate(PotentialTimeAlive = dmy(PotentialTimeAlive))%>%
+  mutate(DateDied = case_when(DateDied <= DatePlanted ~ DatePlanted, .default = DateDied))%>% #If TimeAlive is negative because DatePlanted occurs after DateDied, use DatePlanted, Otherwise default to using DateDied
+  mutate(RatioTimeAlive = dmy(RatioTimeAlive))%>% #Ash note: where do we actually caulculate this??? why is this here? why is it dmy?
+  mutate(PotentialTimeAlive = dmy(PotentialTimeAlive))%>% #Ash note: where do we actually caulculate this??? why is this here? why is it dmy?
   
 #Calculate whether an ind is alive base on the most recent positive observation
   mutate(Outcome = case_when(Monitor1 == 'Muerta' | Monitor2 == 'Muerta' | Monitor3 == 'Muerta' ~ 'Dead',
                              Monitor3 == 'Nueva' | Monitor3 == 'Viva' ~ 'Alive',
                              is.na(Monitor1) | is.na(Monitor2) | is.na(Monitor3) ~ 'Presumed Dead'
-                             ))%>%
+                             ))%>% #Ash note: I'm not sure all of these should be presumed dead... Only if there's an NA in the most recent monitor col right? --> confirmed that my thought is correct; this is how we code outcome in seedlings_joined 
   
 #calculate TimeAlive as difference between DatePlanted and DateDied
   mutate(PotentialTimeAlive = LastObservedDateM3 - DatePlanted)%>% #days since it was first planted
@@ -90,19 +90,21 @@ priority_sites <- seedlings_clean%>%
   group_by(PlantedReg, Ranch, N, W)%>%
   summarise(n())
 
-#adds new columns
-outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
+#adds new columns --> Ash not: this comment should not be above where you make the entire df --> instead here there should some info about the df --> ex: Takes data collected in the field in Nov 2024 and recodes some columns that have irregular (shade, height, etc)
+outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>% #Ash note: again we don't need to add columns in dplyr
   add_column(Monitor4 = NA)%>%
   add_column(Canopy_num = NA)%>%
   add_column(Condition_num = NA)%>%
   add_column(Height_cm = NA)%>%
+#Ash note: it's worth renaming any columns to have _ rather than spaces  
   
 #interprets dead individuals with a Height of N/A as a Height_cm of 0  
   mutate(Height_cm=recode(Height,'N/A' = '0'))%>%
   
-#renames columns to match previous data
-  mutate(Ranch=recode(Ranch, 'San Dio' = 'Rancho San Dionisio'))%>%
-  mutate(Ranch=recode(Ranch, 'Santo Do' = 'Santo Domingo'))%>%
+#renames columns to match previous data --> Ash note: this can (and should) be coded more efficiently instead of being on seperate lines, recode can take multiple inputs, ex in Santo Do, also note that this comment should have more detail e.g. to match spelling in Daniel's database and therefore in the seedlings_clean df
+  mutate(Ranch=recode(Ranch, 
+                      'San Dio' = 'Rancho San Dionisio',
+                      'Santo Do' = 'Santo Domingo'))%>%
   mutate(Ranch=recode(Ranch, 'La Palapa' = 'La Rueda (Palapa)'))%>%
   mutate(Ranch=recode(Ranch, 'Parque de Santiago' = 'Parque Ecológico Santiago'))%>%
   mutate(Ranch=recode(Ranch, 'Santa Gertrudis (orchard)' = 'Santa Gertudris (Huerta)'))%>%
@@ -158,7 +160,7 @@ outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
   
   
 #converts variables into numeric so they can do math
-  mutate(Date = mdy(Date))%>%
+  #mutate(Date = mdy(Date))%>% #Ash note: the reason this fails to parse as dmy() is because dmy means to lubridate that the characters appear as day/month/year which is how they write dates in daniel's df bc that's how they write dates in LatAm HOWEVER the data input into this pipe is not from Daniel's database but rather *our* fieldnotes which has dates written in month/day/year format bc that's the format we use in the US so the lubridate command here should in fact be mdy() BUT ALSO NOTE we don't need to format the date here at all --> we don't end up using the specific date of observation to calculate TimeAlive but rather the object "Monitor4Date" that we made based on the last date we observed plants during our monitoring trip 
   mutate(Condition_num=as.numeric(Condition_num))%>%
   mutate(Canopy_num=as.numeric(Canopy_num))%>%
   mutate(Height_cm=as.numeric(Height_cm))%>%
@@ -167,10 +169,10 @@ outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
 
 #Adding relevant data from most recent monitoring (Nov 2024) to the pre-existing data
 seedlings_clean_joined <- outplanted_seedlings_nov24%>%
-  select(Ranch, `Metal tag ID`, Monitor4)%>% #these are the only columns we need to carry over
+  select(Ranch, `Metal tag ID`, Monitor4)%>% #these are the only columns we need to carry over to add the fourth monitoring date and then update survivorship curves
   left_join(seedlings_clean, ., by = 'Metal tag ID')%>%
 
-#Adding to previous Outcome in seedlings_clean: 
+#Adding to previous Outcome in seedlings_clean
   mutate(Outcome = case_when((Monitor1 == 'Muerta' | Monitor2 == 'Muerta' | Monitor3 == 'Muerta' | Monitor4 == 'Muerta') ~ 'Dead',
                              Monitor4 == 'Nueva' | Monitor4 == 'Viva' ~ 'Alive',
                              is.na(Monitor4) ~ 'Presumed Dead'))%>%
@@ -192,9 +194,10 @@ seedlings_clean_joined <- outplanted_seedlings_nov24%>%
   mutate(RatioTimeAlive = (as.numeric(TimeAlive)) / (as.numeric(PotentialTimeAlive)))%>%
   mutate(LastObservedDateM4 = LastObservedDateM4)
 
-
+# needs a short comment describing this code!
 seedlings_clean_joined%>%
   filter(!`Metal tag ID` %in% seedlings_clean$`Metal tag ID`)
+
 
 ####FOR LOOP: SURVIVORSHIP CURVE####
 #creating a df with increments of 1 day to represent how old a seedling could be
