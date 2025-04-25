@@ -13,6 +13,10 @@ library(brant)
 library(GGally)
 library(rgl)
 library(survival)
+library(scales)
+
+#creates a function
+"%notin%"<-Negate("%in%")
 
 #library(chisq.posthoc.test)
 setwd("C:/Users/DBarry/Desktop/GitHub/QUBR_exsitu_gen_diversity")
@@ -200,6 +204,7 @@ outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
 
 
 
+
 #Adding relevant data from most recent monitoring (Nov 2024) to the pre-existing data
 seedlings_clean_joined <- outplanted_seedlings_nov24%>%
   dplyr::select(Ranch, MetalTagID, Monitor4)%>% #these are the only columns we need to carry over to add the fourth monitoring date and then update survivorship curves
@@ -237,7 +242,8 @@ outplanted_seedlings_nov24 <- outplanted_seedlings_nov24%>%
   mutate(TimeAlive = case_when(
     !is.na(DatePlanted) ~ LastObservedDateM4 - dmy(DatePlanted),
     is.na(DatePlanted) ~ TimeAlive))%>%
-  mutate(TimeAliveNum = as.numeric(TimeAlive))
+  mutate(TimeAliveNum = as.numeric(TimeAlive))%>%
+  mutate(PotentialTimeAlive = LastObservedDateM4 - dmy(DatePlanted))
 
         
   
@@ -248,7 +254,18 @@ outplanted_seedlings_nov24 <- outplanted_seedlings_nov24%>%
 
 ####FOR LOOP: SURVIVORSHIP CURVE####
 #creating a df with increments of 1 day to represent how old a seedling could be
-max_age <- as.numeric(max(seedlings_clean_joined$TimeAlive, na.rm = TRUE))
+#not represented in Daniel's dataset, but that we found and can encorporate into survivorship curve
+nov24_notindaniel <- outplanted_seedlings_nov24%>%
+  filter(MetalTagID %notin% seedlings_clean_joined$MetalTagID)%>%
+  filter(!is.na(TimeAlive))%>%
+  dplyr::select(c(TimeAlive, PotentialTimeAlive))
+
+input_for_df_age <- seedlings_clean_joined%>%
+  dplyr::select(c(TimeAlive, PotentialTimeAlive))%>%
+  rbind(nov24_notindaniel)
+
+
+max_age <- as.numeric(max(input_for_df_age$TimeAlive, na.rm = TRUE))
 
 df_age <- 
   data.frame("Days"=seq(0, max_age, 1), "TotalAlive" = NA) 
@@ -257,23 +274,23 @@ df_age <-
 #with Monitor4 added
 for (i in 1:nrow(df_age)) {
   Day <- df_age$Days[i] #df_age$Days is a vector (one column in this df)
-  Num_seedlings_alive <- sum(Day <= seedlings_clean_joined$TimeAlive, na.rm = TRUE)
+  Num_seedlings_alive <- sum(Day <= input_for_df_age$TimeAlive, na.rm = TRUE)
   #Day is a temporary object that holds the output of the day we are on in the iterative loop
   df_age$TotalAlive[i] <- paste0(Num_seedlings_alive)
   #fill one cell per iteration with the total number of seedlings alive by that day
 }
 #how many seedlings are alive after 1 year?
-num_alive_1yr <- seedlings_clean_joined%>%
-  filter((TimeAlive>=365 & PotentialTimeAlive>=365) | (TimeAlive<365 & RatioTimeAlive==1))%>%
+num_alive_1yr <- input_for_df_age%>%
+  filter((TimeAlive>=365 & PotentialTimeAlive>=365) | (TimeAlive<365 & PotentialTimeAlive==TimeAlive))%>%
   nrow()
 
 #how many seedlings are alive after 2 years?
-num_alive_2yr <- seedlings_clean_joined%>%
-  filter((TimeAlive>=730 & PotentialTimeAlive>=730) | (TimeAlive<730 & RatioTimeAlive==1))%>%
+num_alive_2yr <- input_for_df_age%>%
+  filter((TimeAlive>=730 & PotentialTimeAlive>=730) | (TimeAlive<730 & PotentialTimeAlive==TimeAlive))%>%
   nrow()
 
 #perc alive after 1 year
-num_alive_1yr/nrow(seedlings_clean_joined)
+num_alive_1yr/nrow(input_for_df_age)
 
 #perc of inds alive at 1yr that are also alive at 2yr
 num_alive_2yr/num_alive_1yr
@@ -327,21 +344,6 @@ df_age_ratio_perc %>% #curve shown with y = percentage
   xlab('Realized time alive / Potential time alive') +
   ylab('% of individuals') +
   ggtitle("seedlings_clean_joined: %") +
-  theme_classic()
-
-#Days Alive vs # of individuals
-#With marks at 1 year and 2 years
-df_age_final%>%
-  ggplot()+
-  geom_step(aes(x = Days, y = TotalAlive)) +
-  #ylim(0, 2000) +
-  xlab('Days') +
-  ylab('# of individuals alive') +
-  geom_vline(xintercept = 365, linetype="dashed") + 
-  geom_text(label="1 year", x=365-70, y=1500) +
-  geom_vline(xintercept = (365*2), linetype="dashed") + 
-  geom_text(label="2 years", x=(365*2)-75, y=1500) +
-  ggtitle("# of seedlings alive over time") +
   theme_classic()
 
 ####CONVERTING FOR LOOP TO FUNCTION####
@@ -732,12 +734,85 @@ sf <- function(y) {
 
 (s <- with(outplanted_seedlings_nov24, summary(as.numeric(Condition_num) ~ Region + Canopy_num, fun=sf)))
 
+
+####POSTER FIGURES####
+
+#Survivorship curve (marked at 1 yr and 2 yrs)
+df_age_final%>%
+  ggplot() +
+  geom_step(aes(x = Days, y = TotalAlive)) +
+  xlab('Days') +
+  ylab('# of live individuals') +
+  scale_x_continuous(name = 'time', 
+                     breaks = c(0, 182.5, 365, 547.5, 730, 912.5), #adds tick marks at 6 month intervals
+                     labels = c('0', '0.5yr', '1yr', '1.5yrs','2yrs', '2.5yrs')) +
+  geom_vline(xintercept = 365, linetype="dashed", color='red') +  #marks 1 year
+  #geom_text(label="1 year", x=365-70, y=1500) +
+  geom_vline(xintercept = (365*2), linetype="dashed", color='red') + #marks 2 years
+  #geom_text(label="2 years", x=(365*2)-75, y=1500) +
+  ggtitle("# of seedlings alive over time") +
+  theme_classic()
+
+show_ages <- seedlings_clean_joined%>%
+  filter(Outcome == 'Alive')
+#youngest living seedlings are 653 days, oldest are 1005
+#there are 9 inds at 653
+
+
+
+
+#How many seedlings that are still alive are less than 1 year old?
+seedlings_clean_joined%>%
+  filter(Outcome == 'Alive')%>%
+  filter(TimeAlive < (365))%>%
+  nrow()
+#How many seedlings that are still alive are less than 2 years old?
+seedlings_clean_joined%>%
+  filter(Outcome == 'Alive')%>%
+  filter(TimeAlive < (365*2))%>%
+  nrow()
+
+#Ranch vs Condition
+outplanted_seedlings_nov24_aov%>%
+  ggplot() +
+  ggtitle("Ranch vs Condition") +
+  geom_bar(aes(x = Condition_num, fill = Region)) +
+  facet_wrap(~Ranch) +
+  scale_fill_manual(values = c("N" = "#558b2f", "E" = "#e65100", "W" = "#0288d1")) + #uses standard colors for regions
+  xlab("Condition") +
+  ylab("# of individuals") +
+  scale_x_discrete(labels = c("0" = "Dead", "0.25" = "Poor", "0.5" = "Fine", "0.75" = "Good", "1" = "Great")) + #replaces numeric labels by writing the condition classes they represent
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+
+#Freq. of condition, faceted by canopy
+outplanted_seedlings_nov24_aov%>%
+  filter(!is.na(Canopy_num))%>% #removes any individuals missing Canopy data
+  mutate(Canopy_num = as.factor(as.character(Canopy_num)))%>%
+  
+  ggplot() +
+  ggtitle('Condition of seedlings by canopy cover') +
+  xlab('Seedling Condition') +
+  ylab('Proportion of individuals \n within canopy class') +
+  
+  geom_bar(aes(x=Condition_num, y=..prop.., fill=Condition_num), stat = 'prop') +
+  scale_fill_manual(values=c("#dddddd", "#aaaaaa", "#777777", "#555555", "#333333"), 
+                    labels=c('dead', 'poor', 'fine','good', 'great'),
+                    (name = "Condition"))+
+  facet_grid(~Canopy_num, labeller = labeller(Canopy_num = c(
+    "0" = "full shade", "0.25" = "partial sun", "0.5" = "half sun", "0.75" = "mostly sun", "1" = "full sun"))) + #labels the facets with the names of Canopy classes, rather than the numeric values
+  scale_x_discrete(labels = c("0" = "Dead", "0.25" = "Poor", "0.5" = "Fine", "0.75" = "Good", "1" = "Great")) + #replaces the numeric labels by writing the Condition classes
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+
+
+
+#other exploratory figures
 #Height (upper) vs Height (lower)
 outplanted_seedlings_nov24_aov%>%
   ggplot() +
   ggtitle("Height (upper) vs Height (lower)") +
   geom_point(aes(x = Height_upper_standardized, y = Height_lower_standardized)) +
-  #geom_jitter(aes(x = Height_upper_standardized, y = Height_lower_standardized)) +
   xlim(0,1) +
   ylim(0,1) +
   theme_classic()
@@ -747,7 +822,6 @@ outplanted_seedlings_nov24_aov%>%
   ggplot() +
   ggtitle("Height (lower) vs Height (upper)") +
   geom_point(aes(x = Height_lower_standardized, y = Height_upper_standardized)) +
-  #geom_jitter(aes(x = Height_lower_standardized, y = Height_upper_standardized)) +
   xlim(0,1) +
   ylim(0,1) +
   theme_classic()
@@ -757,19 +831,12 @@ outplanted_seedlings_nov24_aov%>%
   geom_histogram(aes(x = Height_upper_standardized))+
   theme_classic()
 
-#rename shade categories
-#pictograms of increasing sun/condition
-
-
-
-class(outplanted_seedlings_nov24_aov$Canopy_num)
 #Canopy vs Height (upper)
 outplanted_seedlings_nov24_aov%>%
   filter(!is.na(Canopy_num))%>%
   mutate(Canopy_num = as.factor(as.character(Canopy_num)))%>%
   ggplot() +
   ggtitle("Canopy vs Height (upper)") +
-  #ylim(0,1) +
   geom_boxplot(aes(x = Canopy_num, y = Height_upper_standardized)) +
   geom_jitter(aes(x = Canopy_num, y = Height_upper_standardized)) +
   theme_classic()
@@ -780,7 +847,6 @@ outplanted_seedlings_nov24_aov%>%
   mutate(Canopy_num = as.factor(as.character(Canopy_num)))%>%
   ggplot() +
   ggtitle("Canopy vs Height (lower)") +
-  #ylim(0,1) +
   geom_boxplot(aes(x = Canopy_num, y = Height_lower_standardized)) +
   geom_jitter(aes(x = Canopy_num, y = Height_lower_standardized)) +
   theme_classic()
@@ -809,7 +875,6 @@ outplanted_seedlings_nov24_aov%>%
 outplanted_seedlings_nov24_aov%>%
   ggplot() +
   ggtitle("Condition vs Height (upper)") +
-  #ylim(0,1) +
   geom_boxplot(aes(x = Condition_num, y = Height_upper_standardized)) +
   geom_jitter(aes(x = Condition_num, y = Height_upper_standardized)) +
   theme_classic()
@@ -818,21 +883,11 @@ outplanted_seedlings_nov24_aov%>%
 outplanted_seedlings_nov24_aov%>%
   ggplot() +
   ggtitle("Condition vs Height (lower)") +
-  #ylim(0,1) +
   geom_boxplot(aes(x = Condition_num, y = Height_lower_standardized)) +
   geom_jitter(aes(x = Condition_num, y = Height_lower_standardized)) +
   theme_classic()
 
-#Ranch vs Condition
-outplanted_seedlings_nov24_aov%>%
-  ggplot() +
-  ggtitle("Ranch vs Condition") +
-  geom_bar(aes(x = Condition_num, fill = Region)) +
-  facet_wrap(~Ranch) +
-  #geom_jitter(aes(x = Ranch, y = Condition_num)) +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 45,
-hjust = 1, vjust = 1))
+
 
 #Condition vs Canopy
 outplanted_seedlings_nov24_aov%>%
@@ -841,20 +896,6 @@ outplanted_seedlings_nov24_aov%>%
   ggplot() +
   ggtitle("Condition vs Canopy") +
   geom_boxplot(aes(x = Condition_num, y = Canopy_num)) +
-  #geom_jitter(aes(x = Condition_num, y = Canopy_num)) +
-  theme_classic()
-
-
-#Freq. of condition, faceted by canopy
-outplanted_seedlings_nov24_aov%>%
-  filter(!is.na(Canopy_num))%>%
-  mutate(Canopy_num = as.factor(as.character(Canopy_num)))%>%
-  ggplot() +
-  ggtitle('Condition of seedlings by canopy cover') +
-  xlab('Seedling Condition') +
-  ylab('# of individuals') +
-  geom_bar(aes(x=Condition_num))+
-  facet_grid(~Canopy_num) +
   theme_classic()
 
 #Canopy vs Ranch
@@ -864,7 +905,6 @@ outplanted_seedlings_nov24_aov%>%
   ggplot() +
   ggtitle("Canopy vs Ranch") +
   geom_boxplot(aes(x = Ranch, y = Canopy_num)) +
-  #geom_jitter(aes(x = Ranch, y = Canopy_num)) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45,
                                    hjust = 1, vjust = 1))
