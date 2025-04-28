@@ -18,7 +18,6 @@ library(scales)
 #creates a function
 "%notin%"<-Negate("%in%")
 
-#library(chisq.posthoc.test)
 setwd("C:/Users/DBarry/Desktop/GitHub/QUBR_exsitu_gen_diversity")
 #setwd("../")
 
@@ -39,7 +38,6 @@ outplanted_seedlings24.field <- read_csv("./data/QUBR Field Datasheets Nov 2024 
 ####DATA CLEANING####
 #combines data from Daniel's 2023 and 2024 tabs
 seedlings_combined <- bind_rows(outplanted_seedlings23, outplanted_seedlings24)
-
 
 
 #renames columns to simplified English, differentiates seed origin and seedling planted region
@@ -85,14 +83,12 @@ seedlings_clean <- seedlings_combined%>%
                                                    Outcome == 'Presumed Dead' ~ (DateDied - DatePlanted)),
          RatioTimeAlive = (as.numeric(TimeAlive)) / (as.numeric(PotentialTimeAlive)))
 
-
            
 #Decide priority sites to visit in Baja based on number of potentially living individuals at each ranch  
 priority_sites <- seedlings_clean%>%
   filter(Outcome == 'Alive')%>%
   group_by(PlantedReg, Ranch, N, W)%>%
   summarise(n())
-
 
 
 #Takes data collected in the field in Nov 2024 and recodes some columns that have irregular (shade, height, etc)
@@ -111,8 +107,13 @@ outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
                       'Palo Verdal' = 'Palo Verdad'))%>%
   
   #combines equivalent variables
-  mutate(Monitor4=recode(Condition, 'the best' = 'Viva','great' = 'Viva', 'good' = 'Viva', 'fair' = 'Viva', 'poor' = 'Viva', 
-                                    'dead' = 'Muerta'))%>%
+  mutate(Monitor4=recode(Condition, 
+                         'the best' = 'Viva',
+                         'great' = 'Viva', 
+                         'good' = 'Viva', 
+                         'fair' = 'Viva', 
+                         'poor' = 'Viva',
+                         'dead' = 'Muerta'))%>%
   mutate(Condition=recode(Condition, 'the best' = 'great'))%>%
   mutate(Height=recode(Height, 'above the knee' = 'above knee',
                                'above shoulders' = 'above shoulder',
@@ -202,9 +203,6 @@ outplanted_seedlings_nov24 <- outplanted_seedlings24.field%>%
   mutate(MetalTagID = `Metal tag ID`)%>%
   mutate(MetalTagID = as.character(MetalTagID)) #Some of the tags have an A/B
 
-
-
-
 #Adding relevant data from most recent monitoring (Nov 2024) to the pre-existing data
 seedlings_clean_joined <- outplanted_seedlings_nov24%>%
   dplyr::select(Ranch, MetalTagID, Monitor4)%>% #these are the only columns we need to carry over to add the fourth monitoring date and then update survivorship curves
@@ -245,12 +243,6 @@ outplanted_seedlings_nov24 <- outplanted_seedlings_nov24%>%
   mutate(TimeAliveNum = as.numeric(TimeAlive))%>%
   mutate(PotentialTimeAlive = LastObservedDateM4 - dmy(DatePlanted))
 
-        
-  
-#identifies MetalTagIDs from seedlings_clean_joined that are not in seedlings_clean
-#seedlings_clean_joined%>%
-#  filter(!MetalTagID %in% seedlings_clean$MetalTagID)
-
 
 ####FOR LOOP: SURVIVORSHIP CURVE####
 #creating a df with increments of 1 day to represent how old a seedling could be
@@ -263,7 +255,6 @@ nov24_notindaniel <- outplanted_seedlings_nov24%>%
 input_for_df_age <- seedlings_clean_joined%>%
   dplyr::select(c(TimeAlive, PotentialTimeAlive))%>%
   rbind(nov24_notindaniel)
-
 
 max_age <- as.numeric(max(input_for_df_age$TimeAlive, na.rm = TRUE))
 
@@ -434,186 +425,6 @@ outplanted_seedlings_nov24%>%
   theme_classic() +
   theme(axis.text.x = element_text(angle = 90))
 
-####SURVIVORSHIP BY AGE CLASS####
-#displays the survivorship curve for each age class (M1, M2, M3 & M4)
-#y = raw numbers
-M1_age %>% #planted between 06/22/21 and 02/13/22: 236 days
-  ggplot() +
-  ggtitle("M1") +
-  geom_step(aes(x = Ratio, y = TotalValue)) +
-  xlim(0, 1) +
-  ylim(0, 510) +
-  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #400 days
-  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #500 days
-  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #600 days
-  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #700 days
-  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #800 days
-  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #900 days
-  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1000 days
-  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  geom_vline(xintercept = 1100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1100 days
-  geom_text(label="1100 days", x=(1100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 1200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1200 days
-  geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  theme_classic()
-
-#y = percent
-M1_age %>%
-  ggplot() +
-  ggtitle("M1") +
-  geom_step(aes(x = Ratio, y = PercValue)) +
-  ylim(0, 1) +
-  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #400 days
-  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #500 days
-  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #600 days
-  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #700 days
-  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #800 days
-  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #900 days
-  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1000 days
-  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  geom_vline(xintercept = 1100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1100 days
-  geom_text(label="1100 days", x=(1100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 1200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1200 days
-  geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  theme_classic()
-    
-####WATERED/UNWATERED####
-seedlings_clean_watered <- seedlings_clean%>%
-  filter(Watered == "Si")
-
-df_age_watered <-
-  data.frame("Days"=seq(0, 1220, 1), "TotalAlive" = NA)
-
-for (i in 1:nrow(df_age)) {
-  Day <- df_age_watered$Days[i]
-  Num_seedlings_alive <- sum(Day <= seedlings_clean_watered$TimeAlive, na.rm = TRUE)
-  df_age_watered$TotalAlive[i] <- paste0(Num_seedlings_alive)
-}
-df_age_watered_final <- df_age_watered%>%
-  mutate(TotalAlive = as.numeric(TotalAlive))%>%
-  mutate(PercentAlive = TotalAlive/max(TotalAlive, na.rm = TRUE))%>%
-  mutate(data_type = "watered")
-
-df_age_watered_final %>%
-  ggplot(aes(x = Days, y = PercentAlive)) +
-  ggtitle("Watered") +
-  geom_step() +
-  theme_classic()
-
-
-#UNWATERED
-seedlings_clean_unwatered <- seedlings_clean%>%
-  filter(Watered == 'No')
-
-df_age_unwatered <-
-  data.frame("Days"=seq(0, 1220, 1), "TotalAlive" = NA)
-
-for (i in 1:nrow(df_age)) {
-  Day <- df_age_unwatered$Days[i]
-  Num_seedlings_alive <- sum(Day <= seedlings_clean_unwatered$TimeAlive, na.rm = TRUE)
-  df_age_unwatered$TotalAlive[i] <- paste0(Num_seedlings_alive)
-}
-
-df_age_unwatered_final <- df_age_unwatered%>%
-  mutate(TotalAlive = as.numeric(TotalAlive))%>%
-  mutate(PercentAlive = TotalAlive/max(TotalAlive, na.rm = TRUE)) %>%
-  mutate(data_type = "unwatered")
-
-df_age_unwatered_final %>%
-  ggplot(aes(x = Days, y = PercentAlive)) +
-  ggtitle("Unwatered") +
-  geom_step() +
-  theme_classic()
-
-#combining layers for all individuals, watered, and unwatered onto one axis
-df_age_for_plotting <- rbind(df_age_final, df_age_watered_final, df_age_unwatered_final)
-
-#displaying as total values of each data_type (watered/unwatered/all)
-df_age_for_plotting %>%
-  ggplot(aes(x = Days, y = TotalAlive, color = data_type)) +
-  geom_step() +
-  theme_classic()
-
-#displaying as percentages of each data_type (watered/unwatered/all)
-df_age_for_plotting %>%
-  ggplot(aes(x = Days, y = PercentAlive, color = data_type)) +
-  geom_step() +
-  theme_classic()
-
-
-####OTHER GRAPHS####
-#TimeAlive per PlantedRegion
-seedlings_clean%>%
-  ggplot() +
-  geom_boxplot(aes(x = PlantedReg, y = TimeAlive, fill = PlantedReg)) +
-  theme_classic()
-
-#seedling outcome by region of origin
-seedlings_clean%>%
-  ggplot() +
-  geom_bar(aes(x = Monitor2, fill = Monitor2)) +
-  facet_grid(~OriginReg) +
-  theme_classic()
-
-#how many of the seedlings are alive vs dead?
-seedlings_alive <- seedlings_clean%>%
-  filter(Outcome == 'Alive')
-seedlings_dead <- seedlings_clean%>%
-  filter(Outcome == 'Dead')
-
-#total mortality of seedlings
-seedlings_clean%>%
-  ggplot(aes(x = Outcome, y =..count..,)) +
-  geom_bar(aes(fill = Outcome)) +
-  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
-  theme_classic()
-
-#mortality of seedlings by region planted
-seedlings_clean%>%
-  ggplot(aes(x = Outcome, y = ..count..,)) +
-  geom_bar(aes(fill = PlantedReg)) +
-  facet_grid(~PlantedReg) +
-  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
-  theme_classic()
-
-#mortality of seedlings by region of origin
-seedlings_clean%>%
-  ggplot(aes(x = Outcome, y = ..count..,)) +
-  geom_bar(aes(fill = OriginReg)) +
-  facet_grid(~OriginReg) +
-  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
-  theme_classic()
-
-#number of seedlings from each region of origin
-seedlings_clean%>%
-  ggplot(aes(x = OriginReg, y =..count..,)) +
-  geom_bar(aes(fill = OriginReg)) +
-  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
-  theme_classic()
 
 ####CHI SQUARED TEST####
 # Create a data frame from the main data set
@@ -648,7 +459,8 @@ outplanted_seedlings_nov24%>%
   mutate(Height_lower=as.numeric(Height_lower))%>%
   mutate(Height_upper=as.numeric(Height_upper))%>%
   dplyr::select(c(Height_upper, Height_lower, Condition_num, Canopy_num, Region))%>%
-  ggpairs(., lower = list(combo = "box"), upper = list(combo = "blank"))
+  ggpairs(., lower = list(combo = "box"), 
+             upper = list(combo = "blank"))
 
 outplanted_seedlings_nov24_aov <- outplanted_seedlings_nov24%>%
   filter(!is.na(TimeAliveNum))%>%
@@ -665,19 +477,15 @@ outplanted_seedlings_nov24_aov <- outplanted_seedlings_nov24%>%
   mutate(Ranch = as.factor(Ranch))%>%
   mutate(Region = as.factor(Region))%>%
   
-  
   dplyr::select(c(Height_upper_standardized, Height_lower_standardized, Canopy_num, Condition_num, Ranch, Region))
-
 
 ggpairs(outplanted_seedlings_nov24_aov, lower = list(combo = "box"), upper = list(combo = "blank"))
 
 summary(aov(data=outplanted_seedlings_nov24_aov, Height_upper_standardized ~ Canopy_num + Ranch + Region))
-
 summary(aov(data=outplanted_seedlings_nov24_aov, Height_lower_standardized ~ Canopy_num + Ranch + Region))
 
 ####ORDINAL REGRESSION####
 #data exploration pre analysis
-
 outplanted_seedlings_nov24%>%
   filter(!is.na(Canopy_num))%>%
   mutate(Ranch=recode(Ranch, 'La Rueda (Palapa)' = 'La Rueda'))%>%
@@ -687,7 +495,8 @@ ggplot(., aes(x = Condition_num, y = as.numeric(Canopy_num))) +
   facet_grid(~Ranch, margins = TRUE) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
 
-## fit ordered logit model and store results 'r'
+#start of ordinal regression
+# fit ordered logit model and store results 'r'
 r <- polr(Condition_num ~ Canopy_num + Ranch, data = outplanted_seedlings_nov24, Hess=TRUE)
 #When we use both Ranch & Region, we get this warning: design appears to be rank-deficient, so dropping some coefs
 #Presumably due to high colinearity between Region & Ranch
@@ -708,21 +517,16 @@ p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
 
 confint.default(r) # CIs assuming normality
 
-
 ## odds ratios: how much more likely is this thing than anything else?
 exp(coef(r))
 
 ## OR and CI
 exp(cbind(OR = coef(r), ci))
 
-
-
-
 #checking assumption that relationship between each pair of outcome groups (condition bins) is the same
 brant(r)
 #we tried using the graphical test from https://stats.oarc.ucla.edu/r/dae/ordinal-logistic-regression/ and got Infinity in the initial table
 #Instead, we used the brant test above, but note that we also get a warning that the test results might be invalid
-
 
 sf <- function(y) {
   c('Y>=0' = qlogis(mean(y >= 0)),
@@ -731,35 +535,23 @@ sf <- function(y) {
     'Y>=0.75' = qlogis(mean(y >= 0.75)),
     'Y>=1' = qlogis(mean(y >= 1)))
 }
-
 (s <- with(outplanted_seedlings_nov24, summary(as.numeric(Condition_num) ~ Region + Canopy_num, fun=sf)))
 
 
-####POSTER FIGURES####
+####CPC POSTER FIGURES####
 
-#Survivorship curve (marked at 1 yr and 2 yrs)
+#SURVIVORSHIP CURVE (marked at 1 yr and 2 yrs)
 df_age_final%>%
   ggplot() +
   geom_step(aes(x = Days, y = TotalAlive)) +
-  xlab('Days') +
   ylab('# of live individuals') +
-  scale_x_continuous(name = 'time', 
+  scale_x_continuous(name = 'time since transplanting', 
                      breaks = c(0, 182.5, 365, 547.5, 730, 912.5), #adds tick marks at 6 month intervals
                      labels = c('0', '0.5yr', '1yr', '1.5yrs','2yrs', '2.5yrs')) +
   geom_vline(xintercept = 365, linetype="dashed", color='red') +  #marks 1 year
-  #geom_text(label="1 year", x=365-70, y=1500) +
   geom_vline(xintercept = (365*2), linetype="dashed", color='red') + #marks 2 years
-  #geom_text(label="2 years", x=(365*2)-75, y=1500) +
   ggtitle("# of seedlings alive over time") +
   theme_classic()
-
-show_ages <- seedlings_clean_joined%>%
-  filter(Outcome == 'Alive')
-#youngest living seedlings are 653 days, oldest are 1005
-#there are 9 inds at 653
-
-
-
 
 #How many seedlings that are still alive are less than 1 year old?
 seedlings_clean_joined%>%
@@ -772,42 +564,99 @@ seedlings_clean_joined%>%
   filter(TimeAlive < (365*2))%>%
   nrow()
 
-#Ranch vs Condition
+show_ages <- seedlings_clean_joined%>%
+  filter(Outcome == 'Alive')
+#youngest living seedlings are 653 days, oldest are 1005
+#there are 9 inds at 653
+
+
+
+#RANCH VS CONDITION
+#calculating sample size for each Ranch
+Ranch_summary_condition <- outplanted_seedlings_nov24_aov %>%
+  group_by(Ranch) %>%
+  summarise(samp = n())
+Ranch_summary_condition
+
 outplanted_seedlings_nov24_aov%>%
   ggplot() +
   ggtitle("Ranch vs Condition") +
+  #geom_bar(aes(x = Condition_num, y=..prop.., fill = Region), stat = 'prop') +
   geom_bar(aes(x = Condition_num, fill = Region)) +
-  facet_wrap(~Ranch) +
-  scale_fill_manual(values = c("N" = "#558b2f", "E" = "#e65100", "W" = "#0288d1")) + #uses standard colors for regions
+  #facet_wrap(~Ranch) + #without sample size
+  facet_wrap(~Ranch,
+             labeller = labeller(Ranch = c(
+    "El Ancón" = "El Ancón \n (n=9)",
+    "La Rueda" = "La Rueda \n (n=4)",
+    "La Semilla" = "La Semilla \n (n=3)",
+    "Palo Verdad" = "Palo Verdad \n (n=6)",
+    "Parque Ecológico Santiago" = "Parque Ecológico Santiago \n (n=17)", 
+    "Rancho San Dionisio" = "Rancho San Dionisio \n (n=92)",
+    "Santa Gertudris" = "Santa Gertudris \n (n=5)",
+    "Santa Gertudris (Huerta)" = "Santa Gertudris (Huerta) \n (n=12)", 
+    "Santo Domingo" = "Santo Domingo \n (n=2)"))) + #with sample size
+  scale_fill_manual(values = c("N" = "#558b2f", 
+                               "E" = "#e65100", 
+                               "W" = "#0288d1")) + #uses standard colors for regions
   xlab("Condition") +
   ylab("# of individuals") +
-  scale_x_discrete(labels = c("0" = "Dead", "0.25" = "Poor", "0.5" = "Fine", "0.75" = "Good", "1" = "Great")) + #replaces numeric labels by writing the condition classes they represent
+  #ylab("proportion of individuals") +
+  scale_x_discrete(labels = c("0" = "Dead", #replaces numeric labels with condition classes
+                              "0.25" = "Poor", 
+                              "0.5" = "Fine", 
+                              "0.75" = "Good", 
+                              "1" = "Great")) + 
   theme_classic() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) #adjusts x axis labels for readability
 
-#Freq. of condition, faceted by canopy
+
+#CONDITION FREQ, FACET BY CANOPY
+#calculates sample size for each Canopy class
+Canopy_summary <- outplanted_seedlings_nov24_aov %>% 
+  group_by(Canopy_num) %>% 
+  summarise(samp = n())
+#also calculate sample size for each Condition class but I don't think that we need this
+Condition_summary <- outplanted_seedlings_nov24_aov %>%
+  group_by(Condition_num) %>%
+  summarise(samp = n())
+#displays samples sizes
+Canopy_summary
+Condition_summary
+
 outplanted_seedlings_nov24_aov%>%
   filter(!is.na(Canopy_num))%>% #removes any individuals missing Canopy data
   mutate(Canopy_num = as.factor(as.character(Canopy_num)))%>%
-  
   ggplot() +
   ggtitle('Condition of seedlings by canopy cover') +
   xlab('Seedling Condition') +
   ylab('Proportion of individuals \n within canopy class') +
-  
-  geom_bar(aes(x=Condition_num, y=..prop.., fill=Condition_num), stat = 'prop') +
-  scale_fill_manual(values=c("#dddddd", "#aaaaaa", "#777777", "#555555", "#333333"), 
-                    labels=c('dead', 'poor', 'fine','good', 'great'),
-                    (name = "Condition"))+
+  geom_bar(aes(x=Condition_num, y=..prop.., fill=Condition_num), stat = 'prop') + #stat = 'prop' creates the proportion of individuals rather than the # of individuals
+  scale_fill_manual(values=c("#dddddd", 
+                             "#aaaaaa", 
+                             "#777777", 
+                             "#555555", 
+                             "#333333"), 
+                    labels=c('dead (n=6)', 
+                             'poor (n=38)', 
+                             'fine (n=50)', 
+                             'good (n=39)', 
+                             'great (n=17)'),
+                    (name = "Condition"))+ #adds shading to Condition classes and creates legend
   facet_grid(~Canopy_num, labeller = labeller(Canopy_num = c(
-    "0" = "full shade", "0.25" = "partial sun", "0.5" = "half sun", "0.75" = "mostly sun", "1" = "full sun"))) + #labels the facets with the names of Canopy classes, rather than the numeric values
-  scale_x_discrete(labels = c("0" = "Dead", "0.25" = "Poor", "0.5" = "Fine", "0.75" = "Good", "1" = "Great")) + #replaces the numeric labels by writing the Condition classes
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+    "0" = "full shade \n (n=9)", 
+    "0.25" = "partial sun \n (n=34)", 
+    "0.5" = "half sun \n (n=36)", 
+    "0.75" = "mostly sun \n (n=46)", 
+    "1" = "full sun \n (n=22)"))) + #labels the facets with the names of Canopy classes and their sample sizes
+  scale_x_discrete(labels = c("0" = "Dead", 
+                              "0.25" = "Poor", 
+                              "0.5" = "Fine", 
+                              "0.75" = "Good", 
+                              "1" = "Great")) + #replaces the numeric labels on x axis with Condition class
+theme_classic() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
 
-
-
-#other exploratory figures
+####EXPLORATORY FIGURES####
 #Height (upper) vs Height (lower)
 outplanted_seedlings_nov24_aov%>%
   ggplot() +
@@ -887,8 +736,6 @@ outplanted_seedlings_nov24_aov%>%
   geom_jitter(aes(x = Condition_num, y = Height_lower_standardized)) +
   theme_classic()
 
-
-
 #Condition vs Canopy
 outplanted_seedlings_nov24_aov%>%
   filter(!is.na(Canopy_num))%>%
@@ -909,6 +756,122 @@ outplanted_seedlings_nov24_aov%>%
   theme(axis.text.x = element_text(angle = 45,
                                    hjust = 1, vjust = 1))
 
+####OTHER GRAPHS####
+#TimeAlive per PlantedRegion
+seedlings_clean%>%
+  ggplot() +
+  geom_boxplot(aes(x = PlantedReg, y = TimeAlive, fill = PlantedReg)) +
+  theme_classic()
+
+#seedling outcome by region of origin
+seedlings_clean%>%
+  ggplot() +
+  geom_bar(aes(x = Monitor2, fill = Monitor2)) +
+  facet_grid(~OriginReg) +
+  theme_classic()
+
+#how many of the seedlings are alive vs dead?
+seedlings_alive <- seedlings_clean%>%
+  filter(Outcome == 'Alive')
+seedlings_dead <- seedlings_clean%>%
+  filter(Outcome == 'Dead')
+
+#total mortality of seedlings
+seedlings_clean%>%
+  ggplot(aes(x = Outcome, y =..count..,)) +
+  geom_bar(aes(fill = Outcome)) +
+  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
+  theme_classic()
+
+#mortality of seedlings by region planted
+seedlings_clean%>%
+  ggplot(aes(x = Outcome, y = ..count..,)) +
+  geom_bar(aes(fill = PlantedReg)) +
+  facet_grid(~PlantedReg) +
+  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
+  theme_classic()
+
+#mortality of seedlings by region of origin
+seedlings_clean%>%
+  ggplot(aes(x = Outcome, y = ..count..,)) +
+  geom_bar(aes(fill = OriginReg)) +
+  facet_grid(~OriginReg) +
+  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
+  theme_classic()
+
+#number of seedlings from each region of origin
+seedlings_clean%>%
+  ggplot(aes(x = OriginReg, y =..count..,)) +
+  geom_bar(aes(fill = OriginReg)) +
+  geom_text(aes(label = ..count..), stat = "count", vjust=-0.5) +
+  theme_classic()
+####SURVIVORSHIP BY AGE CLASS####
+#displays the survivorship curve for each age class (M1, M2, M3 & M4)
+#y = raw numbers
+M1_age %>% #planted between 06/22/21 and 02/13/22: 236 days
+  ggplot() +
+  ggtitle("M1") +
+  geom_step(aes(x = Ratio, y = TotalValue)) +
+  xlim(0, 1) +
+  ylim(0, 510) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #700 days
+  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #800 days
+  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #900 days
+  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1000 days
+  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 1100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1100 days
+  geom_text(label="1100 days", x=(1100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
+  geom_vline(xintercept = 1200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1200 days
+  geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  theme_classic()
+
+#y = percent
+M1_age %>%
+  ggplot() +
+  ggtitle("M1") +
+  geom_step(aes(x = Ratio, y = PercValue)) +
+  ylim(0, 1) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #700 days
+  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #800 days
+  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #900 days
+  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1000 days
+  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 1100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1100 days
+  geom_text(label="1100 days", x=(1100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
+  geom_vline(xintercept = 1200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1200 days
+  geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  theme_classic()
+
 ####TROUBLESHOOTING####
 #find the MetalTagIDs that were recorded twice
 seedlings_clean_joined%>%
@@ -922,3 +885,71 @@ seedlings_clean%>%
 #shows all of the information on the two metal tags that have duplicates
 temp <- seedlings_clean_joined%>%
   filter(MetalTagID %in% c('68', '318'))
+
+
+#identifies MetalTagIDs from seedlings_clean_joined that are not in seedlings_clean
+#seedlings_clean_joined%>%
+#  filter(!MetalTagID %in% seedlings_clean$MetalTagID)
+
+####WATERED/UNWATERED####
+seedlings_clean_watered <- seedlings_clean%>%
+  filter(Watered == "Si")
+
+df_age_watered <-
+  data.frame("Days"=seq(0, 1220, 1), "TotalAlive" = NA)
+
+for (i in 1:nrow(df_age)) {
+  Day <- df_age_watered$Days[i]
+  Num_seedlings_alive <- sum(Day <= seedlings_clean_watered$TimeAlive, na.rm = TRUE)
+  df_age_watered$TotalAlive[i] <- paste0(Num_seedlings_alive)
+}
+df_age_watered_final <- df_age_watered%>%
+  mutate(TotalAlive = as.numeric(TotalAlive))%>%
+  mutate(PercentAlive = TotalAlive/max(TotalAlive, na.rm = TRUE))%>%
+  mutate(data_type = "watered")
+
+df_age_watered_final %>%
+  ggplot(aes(x = Days, y = PercentAlive)) +
+  ggtitle("Watered") +
+  geom_step() +
+  theme_classic()
+
+
+#UNWATERED
+seedlings_clean_unwatered <- seedlings_clean%>%
+  filter(Watered == 'No')
+
+df_age_unwatered <-
+  data.frame("Days"=seq(0, 1220, 1), "TotalAlive" = NA)
+
+for (i in 1:nrow(df_age)) {
+  Day <- df_age_unwatered$Days[i]
+  Num_seedlings_alive <- sum(Day <= seedlings_clean_unwatered$TimeAlive, na.rm = TRUE)
+  df_age_unwatered$TotalAlive[i] <- paste0(Num_seedlings_alive)
+}
+
+df_age_unwatered_final <- df_age_unwatered%>%
+  mutate(TotalAlive = as.numeric(TotalAlive))%>%
+  mutate(PercentAlive = TotalAlive/max(TotalAlive, na.rm = TRUE)) %>%
+  mutate(data_type = "unwatered")
+
+df_age_unwatered_final %>%
+  ggplot(aes(x = Days, y = PercentAlive)) +
+  ggtitle("Unwatered") +
+  geom_step() +
+  theme_classic()
+
+#combining layers for all individuals, watered, and unwatered onto one axis
+df_age_for_plotting <- rbind(df_age_final, df_age_watered_final, df_age_unwatered_final)
+
+#displaying as total values of each data_type (watered/unwatered/all)
+df_age_for_plotting %>%
+  ggplot(aes(x = Days, y = TotalAlive, color = data_type)) +
+  geom_step() +
+  theme_classic()
+
+#displaying as percentages of each data_type (watered/unwatered/all)
+df_age_for_plotting %>%
+  ggplot(aes(x = Days, y = PercentAlive, color = data_type)) +
+  geom_step() +
+  theme_classic()
