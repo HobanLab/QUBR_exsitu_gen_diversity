@@ -552,7 +552,7 @@ summary(null_model)
 null_loglik <- null_model$deviance/-2
 best_loglik <- best_model$deviance/-2
 
-mcfadden_r2 <- 1 - (best_loglik / null_loglik)
+mcfadden_r2 <- 1 - (best_loglik / null_loglik) #info on this R2 --> https://www.numberanalytics.com/blog/comprehensive-guide-mcfaddens-r-squared-logistic-regression but basically this is the level of improtvement of the fitted model over the null model
 
 sf <- function(y) {
   c('Y>=0' = qlogis(mean(y >= 0)),
