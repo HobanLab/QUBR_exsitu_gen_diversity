@@ -14,6 +14,19 @@ library(GGally)
 library(rgl)
 library(survival)
 library(scales)
+library(ggmap)
+
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(maps)
+library(sf)
+library(sp)
+library(raster)
+library(basemaps)
+library(mapedit)
+
+#install.packages('mapedit')
+#devtools::install_github("16EAGLE/basemaps")
 
 #creates a function
 "%notin%"<-Negate("%in%")
@@ -272,12 +285,12 @@ for (i in 1:nrow(df_age)) {
 }
 #how many seedlings are alive after 1 year?
 num_alive_1yr <- input_for_df_age%>%
-  filter((TimeAlive>=365 & PotentialTimeAlive>=365) | (TimeAlive<365 & PotentialTimeAlive==TimeAlive))%>%
+  filter((TimeAlive>=365 & PotentialTimeAlive>=365))%>%
   nrow()
 
 #how many seedlings are alive after 2 years?
 num_alive_2yr <- input_for_df_age%>%
-  filter((TimeAlive>=730 & PotentialTimeAlive>=730) | (TimeAlive<730 & PotentialTimeAlive==TimeAlive))%>%
+  filter((TimeAlive>=730 & PotentialTimeAlive>=730))%>%
   nrow()
 
 #perc alive after 1 year
@@ -563,11 +576,77 @@ seedlings_clean_joined%>%
   filter(Outcome == 'Alive')%>%
   filter(TimeAlive < (365*2))%>%
   nrow()
-
 show_ages <- seedlings_clean_joined%>%
   filter(Outcome == 'Alive')
 #youngest living seedlings are 653 days, oldest are 1005
 #there are 9 inds at 653
+
+
+#WATERFALL: ALTERNATIVE TO SURVIVORSHIP CURVE
+
+#Survivorship waterfall plot
+waterfall_plot_df<- input_for_df_age %>%
+  mutate_all(~ as.numeric(.)) %>%
+  mutate(Condition = as.factor(case_when(TimeAlive == PotentialTimeAlive ~ "Alive", 
+                                         TimeAlive != PotentialTimeAlive ~ "Dead"))) %>% #Add condition back in since I need it to color the lines to differentiate between things which died and things which are still alive
+  mutate(rank = row_number(desc(TimeAlive))) %>% #Making a column with a ranked value for each individual so I can offset each individual by a small amount on my yaxis AND have the individuals appear in order by longest time alive at the top of the graph  
+  mutate(yval = 19.5 - rank*.0075) %>% #setting the value for the horizontal line for each individual, with a max value of 19.5 and then descending by rank 
+  rowwise() %>% #I don't know why I need this but without it the uniform distribution call below outputs the same value for every row
+  mutate(xval = TimeAlive + runif(1, min = -5, max = 5)) #setting the value for the vertical line for each individual by jittering a small amount from the real TimeAlive value (via sampling from a uniform distribution) 
+
+#Making a df with just dead individuals so that I can not plot vertical lines for the individuals that are still alive
+waterfall_plot_df_Dead <- waterfall_plot_df%>%
+  filter(Condition == "Dead")
+
+
+waterfall_plot_df %>%
+  ggplot(aes(x = TimeAlive)) +
+  geom_segment(aes(x = 0, xend = xval, y=yval, yend=yval, color = Condition), linewidth = .25, alpha = .5) + #Makes the horizontal line for each individual
+  geom_segment(data = waterfall_plot_df_Dead, aes(x = xval, xend = xval, y=yval, yend=.5, color = Condition), alpha = .25) + #Makes the vertical (death) line for each individual
+  scale_color_manual(values = c("darkgreen", "gray")) + #sets the colors for the lines based on the Condition with living inds being green
+  ylab("") + 
+  ggtitle('Survivorship') +
+  scale_y_continuous(breaks = c(2.5, 16), #adds tick only for Dead and Alive 
+                     labels = c('Dead', 'Alive'), 
+                     limits = c(0,20)) + #set y lim 
+  scale_x_continuous(name = 'Time since outplanting', 
+                     breaks = c(0, 182.5, 365,
+                                547.5, 730, 912.5), #adds tick marks at 6 month intervals
+                     labels = c('0', '0.5yr', '1yr',
+                                '1.5yrs','2yrs', '2.5yrs')) +
+  geom_vline(xintercept = 0, linetype="dashed", color='red') +  #marks 0 year
+  geom_vline(xintercept = 365, linetype="dashed", color='red') +  #marks 1 year
+  geom_vline(xintercept = (365*2), linetype="dashed", color='red') + #marks 2 years
+  theme_classic()
+
+#How many inds do we start with?
+waterfall_plot_df%>%
+  filter(TimeAlive >= 0)%>%
+  nrow()
+#How many inds die immediately?
+waterfall_plot_df%>%
+  filter(TimeAlive == 0)%>%
+  nrow()
+#How many inds does the leave to continue on?
+waterfall_plot_df%>%
+  filter(TimeAlive > 0)%>%
+  nrow()
+#How many inds are alive at 1 yr?
+waterfall_plot_df%>%
+  filter(TimeAlive >= (365))%>%
+  nrow()
+#How many could have lived to 1yr?
+waterfall_plot_df%>%
+  filter(PotentialTimeAlive >= (365))%>%
+  nrow()
+#How many inds are alive at 2 yrs?
+waterfall_plot_df%>%
+  filter(TimeAlive >= (365*2))%>%
+  nrow()
+#How many could have lived to 2yr?
+waterfall_plot_df%>%
+  filter(PotentialTimeAlive >= (365*2))%>%
+  nrow()
 
 
 
@@ -580,7 +659,7 @@ Ranch_summary_condition
 
 outplanted_seedlings_nov24_aov%>%
   ggplot() +
-  ggtitle("Ranch vs Condition") +
+  ggtitle("Condition of seedlings by ranch") +
   #geom_bar(aes(x = Condition_num, y=..prop.., fill = Region), stat = 'prop') +
   geom_bar(aes(x = Condition_num, fill = Region)) +
   #facet_wrap(~Ranch) + #without sample size
@@ -755,6 +834,45 @@ outplanted_seedlings_nov24_aov%>%
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45,
                                    hjust = 1, vjust = 1))
+
+####MAPS####
+#loads an outline map of the world
+world <- ne_countries(scale = "medium", returnclass = "sf")
+#makes the longitudinal coordinate negative so that it maps to the West rather than East
+outplanted_seedlings_mapping <- outplanted_seedlings_nov24%>%
+  mutate(W = -(W))
+
+#defines the extent we want satellite imagery for
+bcs <- draw_ext()
+#returns the extent we defined
+map <- basemap()
+#plots the basemap area we defined
+basemap_ggplot(bcs)
+
+#sets the basemap style to satellite imagery
+set_defaults(ext = bcs, map_service = "esri", map_type = "world_imagery")
+#get_defaults()
+
+#displays a map W/O SATELLITE, zoomed to include points/be larger than the population extent
+ggplot(data = world) +
+  geom_sf(alpha = .01) +
+  geom_point(data = outplanted_seedlings_mapping, aes(x = `W`, y = `N`, color = Region), show.legend = F) +
+  #basemap_gglayer(bcs) +
+  #scale_fill_identity() +
+  coord_sf(xlim = c(min(-111), max(-109)), ylim = c(min(22.75), max(24.5)), expand = FALSE) + #limits the map to the population area
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1))
+
+
+
+
+
+
+
+
+  
+
+
 
 ####OTHER GRAPHS####
 #TimeAlive per PlantedRegion
