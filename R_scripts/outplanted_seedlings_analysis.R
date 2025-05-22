@@ -14,6 +14,7 @@ library(GGally)
 library(rgl)
 library(survival)
 library(scales)
+<<<<<<< HEAD
 library(ggmap)
 
 library(rnaturalearth)
@@ -27,6 +28,9 @@ library(mapedit)
 
 #install.packages('mapedit')
 #devtools::install_github("16EAGLE/basemaps")
+=======
+library(MuMIn)
+>>>>>>> 20f3aae3fa815a2c9646ab0763e9ece5aae37f08
 
 #creates a function
 "%notin%"<-Negate("%in%")
@@ -499,10 +503,12 @@ summary(aov(data=outplanted_seedlings_nov24_aov, Height_lower_standardized ~ Can
 
 ####ORDINAL REGRESSION####
 #data exploration pre analysis
-outplanted_seedlings_nov24%>%
-  filter(!is.na(Canopy_num))%>%
-  mutate(Ranch=recode(Ranch, 'La Rueda (Palapa)' = 'La Rueda'))%>%
-ggplot(., aes(x = Condition_num, y = as.numeric(Canopy_num))) +
+outplanted_seedlings_nov24_for_analysis <- outplanted_seedlings_nov24%>%
+  filter(!is.na(Canopy_num))%>% #making a dataset with no na's so that dredge can run
+  mutate(Ranch=recode(Ranch, 'La Rueda (Palapa)' = 'La Rueda')) #combining a ranch with a single obs with the other portion of that same ranch 
+
+outplanted_seedlings_nov24_for_analysis %>%
+  ggplot(., aes(x = Condition_num, y = as.numeric(Canopy_num))) +
   geom_boxplot(size = .75) +
   geom_jitter(alpha = .5) +
   facet_grid(~Ranch, margins = TRUE) +
@@ -510,15 +516,30 @@ ggplot(., aes(x = Condition_num, y = as.numeric(Canopy_num))) +
 
 #start of ordinal regression
 # fit ordered logit model and store results 'r'
-r <- polr(Condition_num ~ Canopy_num + Ranch, data = outplanted_seedlings_nov24, Hess=TRUE)
+full_model <- polr(Condition_num ~ Canopy_num + Ranch + Region, data = outplanted_seedlings_nov24_for_analysis, Hess=TRUE, na.action = "na.fail")
 #When we use both Ranch & Region, we get this warning: design appears to be rank-deficient, so dropping some coefs
 #Presumably due to high colinearity between Region & Ranch
 
-## view a summary of the model
-summary(r)
+#Dredging the full model to examine which we should keep 
+dredge(full_model)
+#below is the output within 3 AIC points (best models) --> we will need to examine all of them to see if there are differences in interpretation among them
+
+# Model selection table 
+#   (Int) Cnp_num Rnc Rgn df   logLik  AICc delta weight
+# 3     +           +     11 -196.884 417.6  0.00  0.330
+# 5     +               +  6 -202.728 418.0  0.40  0.270
+# 6     +       +       + 10 -198.640 418.8  1.19  0.182
+# 4     +       +   +     15 -193.179 419.8  2.21  0.109
+# 8     +       +   +   + 15 -193.179 419.8  2.21  0.109
+
+#results suggest that one of the best models is canopy and ranch, so running and saving that model alone
+best_model <- polr(Condition_num ~ Canopy_num + Ranch, data = outplanted_seedlings_nov24_for_analysis, Hess=TRUE, na.action = "na.fail")
+
+## view a summary of the best model
+summary(best_model)
 
 ## store table
-(ctable <- coef(summary(r)))
+(ctable <- coef(summary(best_model)))
 
 ## calculate and store p values
 p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
@@ -526,20 +547,28 @@ p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
 ## combined table
 (ctable <- cbind(ctable, "p value" = p))
 
-(ci <- confint(r)) # default method gives profiled CIs
+(ci <- confint(best_model)) # default method gives profiled CIs
 
-confint.default(r) # CIs assuming normality
+confint.default(best_model) # CIs assuming normality
 
 ## odds ratios: how much more likely is this thing than anything else?
-exp(coef(r))
+exp(coef(best_model))
 
 ## OR and CI
-exp(cbind(OR = coef(r), ci))
+exp(cbind(OR = coef(best_model), ci))
 
 #checking assumption that relationship between each pair of outcome groups (condition bins) is the same
-brant(r)
+brant(best_model)
 #we tried using the graphical test from https://stats.oarc.ucla.edu/r/dae/ordinal-logistic-regression/ and got Infinity in the initial table
 #Instead, we used the brant test above, but note that we also get a warning that the test results might be invalid
+
+#checking psuedo r2
+null_model <- polr(Condition_num ~ 1, data = outplanted_seedlings_nov24_for_analysis, Hess=TRUE, na.action = "na.fail")
+summary(null_model)
+null_loglik <- null_model$deviance/-2
+best_loglik <- best_model$deviance/-2
+
+mcfadden_r2 <- 1 - (best_loglik / null_loglik) #info on this R2 --> https://www.numberanalytics.com/blog/comprehensive-guide-mcfaddens-r-squared-logistic-regression but basically this is the level of improtvement of the fitted model over the null model
 
 sf <- function(y) {
   c('Y>=0' = qlogis(mean(y >= 0)),
