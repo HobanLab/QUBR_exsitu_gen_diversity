@@ -14,7 +14,6 @@ library(GGally)
 library(rgl)
 library(survival)
 library(scales)
-<<<<<<< HEAD
 library(ggmap)
 
 library(rnaturalearth)
@@ -25,12 +24,14 @@ library(sp)
 library(raster)
 library(basemaps)
 library(mapedit)
+library(tidyterra)
+library(measurements)
+library(stringr)
+library(stringi)
 
-#install.packages('mapedit')
 #devtools::install_github("16EAGLE/basemaps")
-=======
-library(MuMIn)
->>>>>>> 20f3aae3fa815a2c9646ab0763e9ece5aae37f08
+#library(MuMIn)
+#>>>>>>> 20f3aae3fa815a2c9646ab0763e9ece5aae37f08
 
 #creates a function
 "%notin%"<-Negate("%in%")
@@ -865,42 +866,142 @@ outplanted_seedlings_nov24_aov%>%
                                    hjust = 1, vjust = 1))
 
 ####MAPS####
-#loads an outline map of the world
-world <- ne_countries(scale = "medium", returnclass = "sf")
-#makes the longitudinal coordinate negative so that it maps to the West rather than East
+#ALIVE outplanted individuals
 outplanted_seedlings_mapping <- outplanted_seedlings_nov24%>%
-  mutate(W = -(W))
+  mutate(W = -(W))%>% #makes long coords negative
+  filter(!is.na(N) | !is.na(W))%>% #removes individuals without coordinates
+  add_row(., Ranch = 'Nursery', Region = 'Other', N = 23.4937887, W = -109.7179358) #adds a point for the Nursery
 
-#defines the extent we want satellite imagery for
-bcs <- draw_ext()
-#returns the extent we defined
-map <- basemap()
-#plots the basemap area we defined
-basemap_ggplot(bcs)
+#sets the extent based on the location of our data points, and adds an additional buffer to the box
+bcs_ext <- outplanted_seedlings_mapping%>%
+  st_as_sf(coords = c('W', 'N'), crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")%>%
+  st_transform(crs = 3857)%>%
+  st_buffer(dist = 30000)%>%
+  st_bbox(crs = 3857)
 
 #sets the basemap style to satellite imagery
-set_defaults(ext = bcs, map_service = "esri", map_type = "world_imagery")
-#get_defaults()
+set_defaults(map_service = "esri", map_type = "world_imagery")
 
-#displays a map W/O SATELLITE, zoomed to include points/be larger than the population extent
-ggplot(data = world) +
-  geom_sf(alpha = .01) +
-  geom_point(data = outplanted_seedlings_mapping, aes(x = `W`, y = `N`, color = Region), show.legend = F) +
-  #basemap_gglayer(bcs) +
-  #scale_fill_identity() +
-  coord_sf(xlim = c(min(-111), max(-109)), ylim = c(min(22.75), max(24.5)), expand = FALSE) + #limits the map to the population area
-  theme_light() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1))
+#saves the basemap for our extent as a SpatRaster
+map <- basemap_terra(ext = bcs_ext)%>%
+  as("SpatRaster")
+
+#plots our data points on the basemap
+ggplot() +
+  geom_spatraster_rgb(data = map) +
+  geom_point(data = outplanted_seedlings_mapping, shape=21, aes(x = `W`, y = `N`, color = "black", fill = Region), size = 4) +
+  scale_fill_manual(values=c('#e65100','#558b2f', 'gray','#0288d1'))+
+  scale_color_manual(values = "black") +
+  coord_sf(crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") +
+  #removes all aesthetic details from the axes and legend so that only the map is displayed
+  theme_void() +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position = "none")
+
+#ggsave("./figures/commsmap.png", width = 9, height = 12, units = "in")
 
 
+#ALL outplanted individuals
+fix_deg_min_sec <- seedlings_clean_joined%>%#Fixing lat/long points that are in deg_min_sec
+  filter(!is.na(N)&!is.na(W))%>%
+  filter(grepl("\"", N) & grepl("\"", W)) %>%
+  mutate(N = str_replace(N, "\'", " "))%>%
+  mutate(W = str_replace(W, "\'", " "))%>%
+  mutate(N = str_replace(N, "\"", " "))%>%
+  mutate(W = str_replace(W, "\"", " "))%>%
+  mutate(N = str_replace(N, "° ", " "))%>%
+  mutate(W = str_replace(W, "° ", " "))%>%
+  mutate(N = str_replace(N, "°", " "))%>%
+  mutate(W = str_replace(W, "°", " "))%>%
+  mutate(lat = measurements::conv_unit(N, from = 'deg_min_sec', to = 'dec_deg')) %>%
+  mutate(long = measurements::conv_unit(W, from = 'deg_min_sec', to = 'dec_deg'))
+
+fix_deg_dec_min <- seedlings_clean_joined%>%#Fixing lat/long points that are in deg_dec_min
+  filter(!is.na(N)&!is.na(W))%>%
+  filter(!grepl("\"", N) & !grepl("\"", W))%>%
+  filter(grepl("\\.", N) & grepl("\\.", W))%>%
+  mutate(N = str_replace(N, "\'", " "))%>%
+  mutate(W = str_replace(W, "\'", " "))%>%
+  mutate(N = str_replace(N, "° ", " "))%>%
+  mutate(W = str_replace(W, "° ", " "))%>%
+  mutate(N = str_replace(N, "°", " "))%>%
+  mutate(W = str_replace(W, "°", " "))%>%
+  mutate(N = str_replace(N, "\"", " "))%>%
+  mutate(W = str_replace(W, "\"", " "))%>%
+  mutate(lat = measurements::conv_unit(N, from = 'deg_dec_min', to = 'dec_deg')) %>%
+  mutate(long = measurements::conv_unit(W, from = 'deg_dec_min', to = 'dec_deg'))
+
+fix_deg_other <- seedlings_clean_joined%>% #Fixing lat/long points that are in another format (space where the decimal in minutes should be)
+  filter(!is.na(N)&!is.na(W))%>%
+  filter(!MetalTagID %in% fix_deg_dec_min$MetalTagID)%>%
+  filter(!MetalTagID %in% fix_deg_min_sec$MetalTagID)%>%
+  mutate(N = str_replace(N, "\'", ""))%>%
+  mutate(W = str_replace(W, "\'", ""))%>%
+  mutate(N = str_replace(N, "33 ", "33."))%>%
+  mutate(W = str_replace(W, "48 ", "48."))%>%
+  mutate(N = str_replace(N, "° ", " "))%>%
+  mutate(W = str_replace(W, "° ", " "))%>%
+  mutate(lat = measurements::conv_unit(N, from = 'deg_dec_min', to = 'dec_deg')) %>%
+  mutate(long = measurements::conv_unit(W, from = 'deg_dec_min', to = 'dec_deg'))
+
+#binds all of our converted coordinates back into one df  
+fixed_deg_dec <- fix_deg_dec_min%>%
+  rbind(fix_deg_min_sec)%>%
+  rbind(fix_deg_other)%>%
+  select(c(MetalTagID, Ranch.x, PlantedReg, lat, long))%>%
+  add_row(., MetalTagID = '999', Ranch.x = 'Nursery', PlantedReg = 'Other', lat = '23.4937887', long = '109.7179358')%>% #adds a point for the Nursery
+  mutate(long = paste0("-", long))%>%
+  mutate(long = as.numeric(long))%>%
+  mutate(lat = as.numeric(lat))
+
+bcs_ext_all <- fixed_deg_dec%>%
+  st_as_sf(coords = c('long', 'lat'), crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")%>%
+  st_transform(crs = 3857)%>%
+  st_buffer(dist = 30000)%>%
+  st_bbox(crs = 3857)
+
+map_all <- basemap_terra(ext = bcs_ext_all)%>%
+  as("SpatRaster")
+
+#sets the basemap style to satellite imagery
+set_defaults(map_service = "esri", map_type = "world_imagery")
+
+#Map of all historically planted seedlings
+ggplot() +
+  geom_spatraster_rgb(data = map_all)+
+  geom_point(data = fixed_deg_dec, shape=21, aes(x = long, y = lat, color = "black", fill = PlantedReg), size = 4) +
+  scale_color_manual(values = "black") +
+  scale_fill_manual(values=c('#e65100','#558b2f', 'gray','#0288d1'))+
+  coord_sf(crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") +
+  theme_void() +
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1))
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position = "none")
+
+#ggsave("./figures/commsmap_all.png", width = 9, height = 12, units = "in")
 
 
+#comparing locations of ALIVE & DEAD seedlings
+ggplot() +
+  geom_spatraster_rgb(data = map_all)+
+  geom_point(data = fixed_deg_dec, aes(x = long, y = lat, color = "gray40"), size = 4, alpha = 0.3) +
+  geom_point(data = outplanted_seedlings_mapping, aes(x = `W`, y = `N`, color = "white"), size = 4, alpha = 0.3) +
+  scale_color_manual(values=c('gray40','white'),
+                    labels=c('dead', 'alive'))+
+  coord_sf(crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") +
+  theme_void()
 
-
-
-
-  
-
+ggsave("./figures/commsmap_survival.png", width = 9, height = 12, units = "in")
 
 
 ####OTHER GRAPHS####
