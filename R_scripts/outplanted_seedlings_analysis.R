@@ -889,7 +889,7 @@ map <- basemap_terra(ext = bcs_ext)%>%
 #plots our data points on the basemap
 ggplot() +
   geom_spatraster_rgb(data = map) +
-  geom_point(data = outplanted_seedlings_mapping, shape=21, aes(x = `W`, y = `N`, color = "black", fill = Region), size = 4) +
+  geom_point(data = outplanted_seedlings_mapping, shape=21, aes(x = `W`, y = `N`, color = "black", fill = Region), size = 7) +
   scale_fill_manual(values=c('#e65100','#558b2f', 'gray','#0288d1'))+
   scale_color_manual(values = "black") +
   coord_sf(crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") +
@@ -903,7 +903,8 @@ ggplot() +
         axis.ticks.y=element_blank(),
         legend.position = "none")
 
-#ggsave("./figures/commsmap.png", width = 9, height = 12, units = "in")
+#ggsave("./figures/commsmap7.png", width = 8, height = 12, units = "in")
+
 
 
 #ALL outplanted individuals
@@ -953,7 +954,7 @@ fix_deg_other <- seedlings_clean_joined%>% #Fixing lat/long points that are in a
 fixed_deg_dec <- fix_deg_dec_min%>%
   rbind(fix_deg_min_sec)%>%
   rbind(fix_deg_other)%>%
-  select(c(MetalTagID, Ranch.x, PlantedReg, lat, long))%>%
+  select(c(MetalTagID, Ranch.x, PlantedReg, Outcome, lat, long))%>%
   add_row(., MetalTagID = '999', Ranch.x = 'Nursery', PlantedReg = 'Other', lat = '23.4937887', long = '109.7179358')%>% #adds a point for the Nursery
   mutate(long = paste0("-", long))%>%
   mutate(long = as.numeric(long))%>%
@@ -1003,6 +1004,16 @@ ggplot() +
 
 ggsave("./figures/commsmap_survival.png", width = 9, height = 12, units = "in")
 
+
+ggplot() +
+  geom_spatraster_rgb(data = map_all)+
+  geom_point(data = fixed_deg_dec, aes(x = long, y = lat, fill = Outcome), shape = 21, size = 3, alpha = 0.3) +
+  scale_fill_manual(values=c('yellow', 'magenta', 'cyan'),
+                    labels=c('alive', 'dead', 'presumed dead')) +
+  scale_color_manual(values = 'black') +
+  coord_sf(crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") +
+  theme_void()
+  
 
 ####OTHER GRAPHS####
 #TimeAlive per PlantedRegion
