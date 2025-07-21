@@ -28,9 +28,8 @@ library(tidyterra)
 library(measurements)
 library(stringr)
 library(stringi)
-
 #devtools::install_github("16EAGLE/basemaps")
-#library(MuMIn)
+library(MuMIn)
 #>>>>>>> 20f3aae3fa815a2c9646ab0763e9ece5aae37f08
 
 #creates a function
@@ -81,25 +80,45 @@ seedlings_clean <- seedlings_combined%>%
     #!str_detect(Ranch, "Festival"), #removes rows for individuals handed out at Festival 2023
          !str_detect(Ranch, "Arroyo:"))%>% #removes individuals from the Arroyo: El Palo Santo for analysis bc we didn't observe them in 2024 (they were fairly new)
   mutate(across(starts_with("Monitor"), ~ recode(.x, 'Perdida' = 'Muerta')))%>%  #reclass Perdida (lost) as Muerta (dead)
-#calculate when a seedling died based on when it was last positively observed
-  mutate(DateDied = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3)) | Monitor1 == 'Muerta' ~ dmy(DatePlanted),
-                              (Monitor1 == 'Nueva' | Monitor1 == 'Viva') & (is.na(Monitor2) | Monitor2 == 'Muerta') ~ Monitor1Date,
-                              (Monitor2 == 'Nueva' | Monitor2 == 'Viva') & (is.na(Monitor3) | Monitor3 == 'Muerta') ~ Monitor2Date))%>%
+#calculate when a seedling died assumint that it died the day after it was last observed Alive
+  mutate(DateDied_conservative = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3)) | Monitor1 == 'Muerta' ~ dmy(DatePlanted)+1,
+                              (Monitor1 == 'Nueva' | Monitor1 == 'Viva') & (is.na(Monitor2) | Monitor2 == 'Muerta') ~ Monitor1Date+1,
+                              (Monitor2 == 'Nueva' | Monitor2 == 'Viva') & (is.na(Monitor3) | Monitor3 == 'Muerta') ~ Monitor2Date+1))%>%
+  
+  #calculate when a seedling died assuming that it was alive until the day before monitoring recorded it as Dead
+  mutate(DateDied_liberal = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3)) | Monitor1 == 'Muerta' ~ Monitor1Date-1,
+                                           (Monitor1 == 'Nueva' | Monitor1 == 'Viva') & (is.na(Monitor2) | Monitor2 == 'Muerta') ~ Monitor2Date-1,
+                                           (Monitor2 == 'Nueva' | Monitor2 == 'Viva') & (is.na(Monitor3) | Monitor3 == 'Muerta') ~ Monitor3Date-1))%>%
+  
+  #calculate DateDied_med assuming that it died halfway between the monitoring date it was Alive and the monitoring date it was Dead
+  mutate(DateDied_med = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3)) | Monitor1 == 'Muerta' ~ date(int_end(interval(dmy(DatePlanted), Monitor1Date)/2)),
+                                      (Monitor1 == 'Nueva' | Monitor1 == 'Viva') & (is.na(Monitor2) | Monitor2 == 'Muerta') ~ date(int_end(interval(Monitor1Date, Monitor2Date)/2)),
+                                      (Monitor2 == 'Nueva' | Monitor2 == 'Viva') & (is.na(Monitor3) | Monitor3 == 'Muerta') ~ date(int_end(interval(Monitor2Date, Monitor3Date)/2))))%>%
   
                                 
 #format date as DayMonthYear 
   mutate(DatePlanted = dmy(DatePlanted),
-         DateDied = case_when(DateDied <= DatePlanted ~ DatePlanted, .default = DateDied))%>% #If TimeAlive is negative because DatePlanted occurs after DateDied, use DatePlanted, Otherwise default to using DateDied
+         DateDied_conservative = case_when(DateDied_conservative <= DatePlanted ~ DatePlanted, .default = DateDied_conservative))%>% #If TimeAlive_conservative is negative because DatePlanted occurs after DateDied_conservative, use DatePlanted, Otherwise default to using DateDied_conservative
   
 #Calculate whether an ind is alive base on the most recent positive observation
   mutate(Outcome = case_when(Monitor1 == 'Muerta' | Monitor2 == 'Muerta' | Monitor3 == 'Muerta' ~ 'Dead',
                              Monitor3 == 'Nueva' | Monitor3 == 'Viva' ~ 'Alive',
                              is.na(Monitor3) ~ 'Presumed Dead'),
-         PotentialTimeAlive = LastObservedDateM3 - DatePlanted, #days since it was first planted
-         TimeAlive = case_when(Outcome == 'Alive' ~ (LastObservedDateM3 - DatePlanted), #calculate TimeAlive as difference between DatePlanted and DateDied
-                                                   Outcome == 'Dead' ~ (DateDied - DatePlanted),
-                                                   Outcome == 'Presumed Dead' ~ (DateDied - DatePlanted)),
-         RatioTimeAlive = (as.numeric(TimeAlive)) / (as.numeric(PotentialTimeAlive)))
+         PotentialTimeAlive = (Monitor3Date+1) - DatePlanted, #days since it was first planted
+         TimeAlive_conservative = case_when(Outcome == 'Alive' ~ ((Monitor3Date+1) - DatePlanted), #calculate TimeAlive_conservative as difference between DatePlanted and DateDied_conservative
+                                                   Outcome == 'Dead' ~ (DateDied_conservative - DatePlanted),
+                                                   Outcome == 'Presumed Dead' ~ (DateDied_conservative - DatePlanted)),
+         TimeAlive_liberal = case_when(Outcome == 'Alive' ~ ((Monitor3Date+1) - DatePlanted), #calculate TimeAlive_conservative as difference between DatePlanted and DateDied_conservative
+                                            Outcome == 'Dead' ~ (DateDied_liberal - DatePlanted),
+                                            Outcome == 'Presumed Dead' ~ (DateDied_liberal - DatePlanted)),
+         
+         TimeAlive_med = case_when(Outcome == 'Alive' ~ ((Monitor3Date+1) - DatePlanted), #calculate TimeAlive_conservative as difference between DatePlanted and DateDied_conservative
+                                            Outcome == 'Dead' ~ (DateDied_med - DatePlanted),
+                                            Outcome == 'Presumed Dead' ~ (DateDied_med - DatePlanted)),
+         
+         RatioTimeAlive_conservative = (as.numeric(TimeAlive_conservative)) / (as.numeric(PotentialTimeAlive)),
+         RatioTimeAlive_liberal = (as.numeric(TimeAlive_liberal)) / (as.numeric(PotentialTimeAlive)),
+         RatioTimeAlive_med = (as.numeric(TimeAlive_med)) / (as.numeric(PotentialTimeAlive)))
 
            
 #Decide priority sites to visit in Baja based on number of potentially living individuals at each ranch  
@@ -231,34 +250,74 @@ seedlings_clean_joined <- outplanted_seedlings_nov24%>%
                             (Monitor1 == 'Muerta' | Monitor2 == 'Muerta' | Monitor3 == 'Muerta' | Monitor4 == 'Muerta') ~ 'Dead',
                              is.na(Monitor4) ~ 'Presumed Dead'))%>%
   
-#Adding to previous DateDied in seedlings_clean:
-  #DateDied is calculated based on last positive observation
-  mutate(DateDied = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) & is.na(Monitor4)) | Monitor1 == 'Muerta' ~ DatePlanted,
-                              (Monitor1 == 'Viva' | Monitor1 == 'Nueva') & (Monitor2 == 'Muerta' | is.na(Monitor2)) ~ Monitor1Date,
-                              (Monitor2 == 'Viva' | Monitor2 == 'Nueva') & (Monitor3 == 'Muerta' | is.na(Monitor3)) ~ Monitor2Date,
-                              (Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta' | is.na(Monitor4)) ~ Monitor3Date))%>%
-  #If TimeAlive is negative because DatePlanted occurs after DateDied, use DatePlanted; otherwise default to DateDied
-  mutate(DateDied = case_when(DateDied <= DatePlanted ~ DatePlanted, .default = DateDied))%>%
+#Adding to previous DateDied_conservative in seedlings_clean:
+#DateDied_conservative is calculated based on last positive observation
+  mutate(DateDied_conservative = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) & is.na(Monitor4)) | Monitor1 == 'Muerta' ~ (DatePlanted),
+                                           ((Monitor1 == 'Viva' | Monitor1 == 'Nueva') & (Monitor2 == 'Muerta') | is.na(Monitor2)) ~ (Monitor1Date+1),
+                                           ((Monitor2 == 'Viva' | Monitor2 == 'Nueva') & (Monitor3 == 'Muerta') | is.na(Monitor3)) ~ (Monitor2Date+1),
+                                           ((Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta') | is.na(Monitor4)) ~ (Monitor3Date+1)))%>%
+  
+#DateDied_liberal is the day before it is observed Dead
+  mutate(DateDied_liberal = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) & is.na(Monitor4)) | Monitor1 == 'Muerta' ~ Monitor1Date-1,
+                                           (Monitor1 == 'Viva' | Monitor1 == 'Nueva') & (Monitor2 == 'Muerta' | is.na(Monitor2)) ~ Monitor2Date-1,
+                                           (Monitor2 == 'Viva' | Monitor2 == 'Nueva') & (Monitor3 == 'Muerta' | is.na(Monitor3)) ~ Monitor3Date-1,
+                                           (Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta' | is.na(Monitor4)) ~ Monitor4Date-1))%>%
+  
+#DateDied_med is the mid-point between Monitoring dates
+  mutate(DateDied_med = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) & is.na(Monitor4)) | Monitor1 == 'Muerta' ~ date(int_end(interval((DatePlanted), Monitor1Date)/2)),
+                                      (Monitor1 == 'Viva' | Monitor1 == 'Nueva') & (Monitor2 == 'Muerta' | is.na(Monitor2)) ~ date(int_end(interval(Monitor1Date, Monitor2Date)/2)),
+                                      (Monitor2 == 'Viva' | Monitor2 == 'Nueva') & (Monitor3 == 'Muerta' | is.na(Monitor3)) ~ date(int_end(interval(Monitor2Date, Monitor3Date)/2)),
+                                      (Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta' | is.na(Monitor4)) ~ date(int_end(interval(Monitor3Date, Monitor4Date)/2))))%>%
+  
+  #If TimeAlive_conservative is negative because DatePlanted occurs after DateDied_conservative, use DatePlanted; otherwise default to DateDied_conservative
+  mutate(DateDied_conservative = case_when(DateDied_conservative <= DatePlanted ~ DatePlanted, .default = DateDied_conservative))%>%
+  mutate(DateDied_liberal = case_when(DateDied_liberal <= DatePlanted ~ DatePlanted, .default = DateDied_liberal))%>%
+  mutate(DateDied_med = case_when(DateDied_med <= DatePlanted ~ DatePlanted, .default = DateDied_med))%>%
+  
   mutate(PotentialTimeAlive = LastObservedDateM4 - DatePlanted)%>% #days since it was first planted
-  #TimeAlive is calculated based on outcome and time betweeen DatePlanted &  DateDied
-  mutate(TimeAlive = case_when(Outcome == 'Alive' ~ (LastObservedDateM4 - DatePlanted),
-                               Outcome == 'Dead' ~ (DateDied - DatePlanted),
-                               Outcome == 'Presumed Dead' ~ (DateDied - DatePlanted)))%>%
-  mutate(RatioTimeAlive = (as.numeric(TimeAlive)) / (as.numeric(PotentialTimeAlive)))%>%
+  
+  #TimeAlive_conservative is calculated based on outcome and time betweeen DatePlanted &  DateDied_conservative
+  mutate(TimeAlive_conservative = case_when(Outcome == 'Alive' ~ (LastObservedDateM4 - DatePlanted),
+                                            Outcome == 'Dead' ~ (DateDied_conservative - DatePlanted),
+                                            Outcome == 'Presumed Dead' ~ (DateDied_conservative - DatePlanted)))%>%
+  #TimeAlive_liberal is calculated based on outcome and time betweeen DatePlanted &  DateDied_liberal
+  mutate(TimeAlive_liberal = case_when(Outcome == 'Alive' ~ (Monitor4Date - DatePlanted),
+                                       Outcome == 'Dead' ~ (DateDied_liberal - DatePlanted),
+                                       Outcome == 'Presumed Dead' ~ (DateDied_liberal - DatePlanted)))%>%
+  #TimeAlive_med is calculated based on outcome and time betweeen DatePlanted &  DateDied_liberal
+  mutate(TimeAlive_med = case_when(Outcome == 'Alive' ~ (Monitor4Date - DatePlanted),
+                                   Outcome == 'Dead' ~ (DateDied_med - DatePlanted),
+                                   Outcome == 'Presumed Dead' ~ (DateDied_med - DatePlanted)))%>%
+  
+  mutate(RatioTimeAlive_conservative = (as.numeric(TimeAlive_conservative)) / (as.numeric(PotentialTimeAlive)))%>%
+  mutate(RatioTimeAlive_liberal = (as.numeric(TimeAlive_liberal)) / (as.numeric(PotentialTimeAlive)))%>%
+  mutate(RatioTimeAlive_med = (as.numeric(TimeAlive_med)) / (as.numeric(PotentialTimeAlive)))%>%
   mutate(LastObservedDateM4 = LastObservedDateM4)
 
-
-#adds TimeAlive info to our outplanted individuals from Daniel's database
+#Also add TimeAlive_liberal & med
+#adds TimeAlive_conservative info to our outplanted individuals from Daniel's database
 outplanted_seedlings_nov24 <- outplanted_seedlings_nov24%>%
-  left_join(., dplyr::select(seedlings_clean_joined, c('MetalTagID', 'TimeAlive')), by = 'MetalTagID')%>%
-  rename('Notes' = 'Notes/comments')%>% #below is to add TimeAlive to individuals missing TimeAlive
+  left_join(., dplyr::select(seedlings_clean_joined, c('MetalTagID', 'TimeAlive_conservative', 'TimeAlive_liberal', 'TimeAlive_med')), by = 'MetalTagID')%>%
+  rename('Notes' = 'Notes/comments')%>% 
+#below is to add TimeAlive_conservative to individuals missing TimeAlive_conservative
   mutate(DatePlanted = case_when(
     str_detect(Notes, 'festival') ~ '08/12/2023',
     str_detect(Ranch, 'San Dio') ~ '01/09/2023'))%>%#We don't know the exact date in September they were planted, so we are using Sept 1st
-  mutate(TimeAlive = case_when(
-    !is.na(DatePlanted) ~ LastObservedDateM4 - dmy(DatePlanted),
-    is.na(DatePlanted) ~ TimeAlive))%>%
-  mutate(TimeAliveNum = as.numeric(TimeAlive))%>%
+  #Add other TimeAlives
+  mutate(TimeAlive_conservative = case_when(
+    !is.na(DatePlanted) ~ (Monitor4Date+1) - dmy(DatePlanted),
+    is.na(DatePlanted) ~ TimeAlive_conservative))%>%
+  mutate(TimeAlive_liberal = case_when(
+    !is.na(DatePlanted) ~ (Monitor4Date+1) - dmy(DatePlanted),
+    is.na(DatePlanted) ~ TimeAlive_liberal))%>%
+  mutate(TimeAlive_med = case_when(
+    !is.na(DatePlanted) ~ (Monitor4Date+1) - dmy(DatePlanted),
+    is.na(DatePlanted) ~ TimeAlive_med))%>%
+  
+  mutate(TimeAlive_conservative = as.numeric(TimeAlive_conservative))%>%
+  mutate(TimeAlive_liberal = as.numeric(TimeAlive_liberal))%>%
+  mutate(TimeAlive_med = as.numeric(TimeAlive_med))%>%
+  
   mutate(PotentialTimeAlive = LastObservedDateM4 - dmy(DatePlanted))
 
 
@@ -267,14 +326,14 @@ outplanted_seedlings_nov24 <- outplanted_seedlings_nov24%>%
 #not represented in Daniel's dataset, but that we found and can encorporate into survivorship curve
 nov24_notindaniel <- outplanted_seedlings_nov24%>%
   filter(MetalTagID %notin% seedlings_clean_joined$MetalTagID)%>%
-  filter(!is.na(TimeAlive))%>%
-  dplyr::select(c(TimeAlive, PotentialTimeAlive))
+  filter(!is.na(TimeAlive_conservative))%>%
+  dplyr::select(c(TimeAlive_conservative, TimeAlive_liberal, TimeAlive_med, PotentialTimeAlive))
 
 input_for_df_age <- seedlings_clean_joined%>%
-  dplyr::select(c(TimeAlive, PotentialTimeAlive))%>%
+  dplyr::select(c(TimeAlive_conservative, TimeAlive_liberal, TimeAlive_med, PotentialTimeAlive))%>%
   rbind(nov24_notindaniel)
 
-max_age <- as.numeric(max(input_for_df_age$TimeAlive, na.rm = TRUE))
+max_age <- as.numeric(max(input_for_df_age$TimeAlive_conservative, na.rm = TRUE))
 
 df_age <- 
   data.frame("Days"=seq(0, max_age, 1), "TotalAlive" = NA) 
@@ -283,25 +342,25 @@ df_age <-
 #with Monitor4 added
 for (i in 1:nrow(df_age)) {
   Day <- df_age$Days[i] #df_age$Days is a vector (one column in this df)
-  Num_seedlings_alive <- sum(Day <= input_for_df_age$TimeAlive, na.rm = TRUE)
+  Num_seedlings_alive <- sum(Day <= input_for_df_age$TimeAlive_conservative, na.rm = TRUE)
   #Day is a temporary object that holds the output of the day we are on in the iterative loop
   df_age$TotalAlive[i] <- paste0(Num_seedlings_alive)
   #fill one cell per iteration with the total number of seedlings alive by that day
 }
 #how many seedlings are alive after 1 year?
 num_alive_1yr <- input_for_df_age%>%
-  filter((TimeAlive>=365 & PotentialTimeAlive>=365))%>%
+  filter((TimeAlive_conservative>=365 & PotentialTimeAlive>=365))%>%
   nrow()
 
 #how many seedlings are alive after 2 years?
 num_alive_2yr <- input_for_df_age%>%
-  filter((TimeAlive>=730 & PotentialTimeAlive>=730))%>%
+  filter((TimeAlive_conservative>=730 & PotentialTimeAlive>=730))%>%
   nrow()
 
-#perc alive after 1 year
+#proportion alive after 1 year
 num_alive_1yr/nrow(input_for_df_age)
 
-#perc of inds alive at 1yr that are also alive at 2yr
+#proportion of inds alive at 1yr that are also alive at 2yr
 num_alive_2yr/num_alive_1yr
 
 #plot survivorship curve
@@ -328,7 +387,7 @@ df_age_ratio <- #creates a df that counts from 0 to 1, and with blank columns fo
 
 for (i in 1:nrow(df_age_ratio)) {#for loop fills in TotalValue column
   Ratio_Value <- df_age_ratio$Ratio[i]
-  ratio_hold <- sum(Ratio_Value <= seedlings_clean_joined$RatioTimeAlive, na.rm = TRUE)
+  ratio_hold <- sum(Ratio_Value <= seedlings_clean_joined$RatioTimeAlive_conservative, na.rm = TRUE)
   df_age_ratio$TotalValue[i] <- as.numeric(ratio_hold)
 }
 
@@ -381,7 +440,7 @@ loop_function <- function(source, CustomSequence, fill_in){
   names(df)[2] <- c(fill_in) #overwrites the column title
   for (i in 1:nrow(df)) {
     Ratio_Value <- df$Ratio[i]
-    ratio_hold <- sum(Ratio_Value <= source$RatioTimeAlive, na.rm = TRUE)
+    ratio_hold <- sum(Ratio_Value <= source$RatioTimeAlive_conservative, na.rm = TRUE)
     df[i,2] <-as.numeric(ratio_hold) #saves value to the i row in the 2nd column
   }
   return(df) #this is the part of the for loop we want back as results
@@ -446,19 +505,19 @@ outplanted_seedlings_nov24%>%
 
 ####CHI SQUARED TEST####
 # Create a data frame from the main data set
-watered_data = data.frame(seedlings_clean$Watered, seedlings_clean$Outcome)
+watered_data = data.frame(seedlings_clean_joined$Watered, seedlings_clean_joined$Outcome)
 # Create a contingency table with the needed variables          
-watered_data = table(seedlings_clean$Watered,seedlings_clean$Outcome)
+watered_data = table(seedlings_clean_joined$Watered,seedlings_clean_joined$Outcome)
 print(watered_data)
 print(chisq.test(watered_data))
 
-OriginRegion_outcome = data.frame(seedlings_clean$Outcome, seedlings_clean$OriginReg)
-OriginRegion_outcome = table(seedlings_clean$Outcome, seedlings_clean$OriginReg)
+OriginRegion_outcome = data.frame(seedlings_clean_joined$Outcome, seedlings_clean_joined$OriginReg)
+OriginRegion_outcome = table(seedlings_clean_joined$Outcome, seedlings_clean_joined$OriginReg)
 print(OriginRegion_outcome)
 print(chisq.test(OriginRegion_outcome))
 
-PlantedRegion_outcome = data.frame(seedlings_clean$Outcome, seedlings_clean$PlantedReg)
-PlantedRegion_outcome = table(seedlings_clean$Outcome, seedlings_clean$PlantedReg)
+PlantedRegion_outcome = data.frame(seedlings_clean_joined$Outcome, seedlings_clean_joined$PlantedReg)
+PlantedRegion_outcome = table(seedlings_clean_joined$Outcome, seedlings_clean_joined$PlantedReg)
 print(PlantedRegion_outcome)
 print(chisq.test(PlantedRegion_outcome))
 
@@ -481,13 +540,13 @@ outplanted_seedlings_nov24%>%
              upper = list(combo = "blank"))
 
 outplanted_seedlings_nov24_aov <- outplanted_seedlings_nov24%>%
-  filter(!is.na(TimeAliveNum))%>%
+  filter(!is.na(TimeAlive_conservativeNum))%>%
   mutate(Ranch=recode(Ranch, 'La Rueda (Palapa)' = 'La Rueda'))%>%
   mutate(Height_lower=as.numeric(Height_lower))%>%
   mutate(Height_upper=as.numeric(Height_upper))%>%
   
-  mutate(Height_lower_standardized=Height_lower/TimeAliveNum)%>%
-  mutate(Height_upper_standardized=Height_upper/TimeAliveNum)%>%
+  mutate(Height_lower_standardized=Height_lower/TimeAlive_conservativeNum)%>%
+  mutate(Height_upper_standardized=Height_upper/TimeAlive_conservativeNum)%>%
   
   mutate(Canopy_num = as.factor(Canopy_num))%>%
   mutate(Condition_num = as.factor(Condition_num))%>%
@@ -502,7 +561,7 @@ ggpairs(outplanted_seedlings_nov24_aov, lower = list(combo = "box"), upper = lis
 summary(aov(data=outplanted_seedlings_nov24_aov, Height_upper_standardized ~ Canopy_num + Ranch + Region))
 summary(aov(data=outplanted_seedlings_nov24_aov, Height_lower_standardized ~ Canopy_num + Ranch + Region))
 
-####ORDINAL REGRESSION####
+####ORDINAL REGRESSION- WITH DEAD####
 #data exploration pre analysis
 outplanted_seedlings_nov24_for_analysis <- outplanted_seedlings_nov24%>%
   filter(!is.na(Canopy_num))%>% #making a dataset with no na's so that dredge can run
@@ -581,6 +640,101 @@ sf <- function(y) {
 (s <- with(outplanted_seedlings_nov24, summary(as.numeric(Condition_num) ~ Region + Canopy_num, fun=sf)))
 
 
+####ORDINAL REGRESSION- WITHOUT DEAD####
+#data exploration pre analysis
+
+outplanted_seedlings_nov24_for_analysis_no_dead <- outplanted_seedlings_nov24%>%
+  filter(Condition_num != '0')%>%
+  mutate(Condition_num = as.factor(as.character(Condition_num)))%>%
+  filter(!is.na(Canopy_num))%>% #making a dataset with no na's so that dredge can run
+  mutate(Ranch=recode(Ranch, 'La Rueda (Palapa)' = 'La Rueda')) #combining a ranch with a single obs with the other portion of that same ranch 
+
+outplanted_seedlings_nov24_for_analysis_no_dead %>%
+  ggplot(., aes(x = Condition_num, y = as.numeric(Canopy_num))) +
+  geom_boxplot(size = .75) +
+  geom_jitter(alpha = .5) +
+  facet_grid(~Ranch, margins = TRUE) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+
+#start of ordinal regression
+# fit ordered logit model and store results 'r'
+full_model <- polr(Condition_num ~ Canopy_num + Ranch + Region, data = outplanted_seedlings_nov24_for_analysis_no_dead, Hess=TRUE, na.action = "na.fail")
+#When we use both Ranch & Region, we get this warning: design appears to be rank-deficient, so dropping some coefs
+#Presumably due to high colinearity between Region & Ranch
+
+#Dredging the full model to examine which we should keep 
+dredge(full_model)
+#below is the output within 3 AIC points (best models) --> we will need to examine all of them to see if there are differences in interpretation among them
+
+#WITH DEAD
+# Model selection table 
+#   (Int) Cnp_num Rnc Rgn df   logLik  AICc delta weight
+# 3     +           +     11 -196.884 417.6  0.00  0.330
+# 5     +               +  6 -202.728 418.0  0.40  0.270
+# 6     +       +       + 10 -198.640 418.8  1.19  0.182
+# 4     +       +   +     15 -193.179 419.8  2.21  0.109
+# 8     +       +   +   + 15 -193.179 419.8  2.21  0.109
+
+#WITHOUT DEAD
+
+# Model selection table 
+#   (Int) Cnp_num Rnc Rgn df   logLik  AICc delta weight
+# 4     +       +   +     14 -167.900 367.0  0.00  0.251
+# 8     +       +   +   + 14 -167.900 367.0  0.00  0.251
+# 3     +           +     10 -172.711 367.0  0.07  0.242
+# 6     +       +       +  9 -174.231 367.8  0.81  0.168
+# 5     +               +  5 -179.316 369.1  2.10  0.088
+
+#results suggest that we have two best models, 1. canopy and ranch, 2. all three
+
+best_model <- polr(Condition_num ~ Canopy_num + Ranch, data = outplanted_seedlings_nov24_for_analysis_no_dead, Hess=TRUE, na.action = "na.fail")
+
+## view a summary of the best model
+summary(best_model)
+
+## store table
+(ctable <- coef(summary(best_model)))
+
+## calculate and store p values
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+
+## combined table
+(ctable <- cbind(ctable, "p value" = p))
+
+(ci <- confint(best_model)) # default method gives profiled CIs
+
+confint.default(best_model) # CIs assuming normality
+
+## odds ratios: how much more likely is this thing than anything else?
+exp(coef(best_model))
+
+## OR and CI
+exp(cbind(OR = coef(best_model), ci))
+
+#checking assumption that relationship between each pair of outcome groups (condition bins) is the same
+brant(best_model)
+#we tried using the graphical test from https://stats.oarc.ucla.edu/r/dae/ordinal-logistic-regression/ and got Infinity in the initial table
+#Instead, we used the brant test above, but note that we also get a warning that the test results might be invalid
+
+#checking psuedo r2
+null_model <- polr(Condition_num ~ 1, data = outplanted_seedlings_nov24_for_analysis_no_dead, Hess=TRUE, na.action = "na.fail")
+summary(null_model)
+null_loglik <- null_model$deviance/-2
+best_loglik <- best_model$deviance/-2
+
+mcfadden_r2 <- 1 - (best_loglik / null_loglik) #info on this R2 --> https://www.numberanalytics.com/blog/comprehensive-guide-mcfaddens-r-squared-logistic-regression but basically this is the level of improvement of the fitted model over the null model
+
+sf <- function(y) {
+  c('Y>=0' = qlogis(mean(y >= 0)),
+    'Y>=0.25' = qlogis(mean(y >= 0.25)),
+    'Y>=0.5' = qlogis(mean(y >= 0.5)),
+    'Y>=0.75' = qlogis(mean(y >= 0.75)),
+    'Y>=1' = qlogis(mean(y >= 1)))
+}
+(s <- with(outplanted_seedlings_nov24, summary(as.numeric(Condition_num) ~ Region + Canopy_num, fun=sf)))
+
+
+
 ####CPC POSTER FIGURES####
 
 #SURVIVORSHIP CURVE (marked at 1 yr and 2 yrs)
@@ -599,12 +753,12 @@ df_age_final%>%
 #How many seedlings that are still alive are less than 1 year old?
 seedlings_clean_joined%>%
   filter(Outcome == 'Alive')%>%
-  filter(TimeAlive < (365))%>%
+  filter(TimeAlive_conservative < (365))%>%
   nrow()
 #How many seedlings that are still alive are less than 2 years old?
 seedlings_clean_joined%>%
   filter(Outcome == 'Alive')%>%
-  filter(TimeAlive < (365*2))%>%
+  filter(TimeAlive_conservative < (365*2))%>%
   nrow()
 show_ages <- seedlings_clean_joined%>%
   filter(Outcome == 'Alive')
@@ -614,28 +768,27 @@ show_ages <- seedlings_clean_joined%>%
 
 #WATERFALL: ALTERNATIVE TO SURVIVORSHIP CURVE
 
-#Survivorship waterfall plot
-waterfall_plot_df<- input_for_df_age %>%
+#CONSERVATIVE
+waterfall_plot_df_conservative<- input_for_df_age %>%
   mutate_all(~ as.numeric(.)) %>%
-  mutate(Condition = as.factor(case_when(TimeAlive == PotentialTimeAlive ~ "Alive", 
-                                         TimeAlive != PotentialTimeAlive ~ "Dead"))) %>% #Add condition back in since I need it to color the lines to differentiate between things which died and things which are still alive
-  mutate(rank = row_number(desc(TimeAlive))) %>% #Making a column with a ranked value for each individual so I can offset each individual by a small amount on my yaxis AND have the individuals appear in order by longest time alive at the top of the graph  
+  mutate(Condition = as.factor(case_when(TimeAlive_conservative == PotentialTimeAlive ~ "Alive", 
+                                         TimeAlive_conservative != PotentialTimeAlive ~ "Dead"))) %>% #Add condition back in since I need it to color the lines to differentiate between things which died and things which are still alive
+  mutate(rank = row_number(desc(TimeAlive_conservative))) %>% #Making a column with a ranked value for each individual so I can offset each individual by a small amount on my yaxis AND have the individuals appear in order by longest time alive at the top of the graph  
   mutate(yval = 19.5 - rank*.0075) %>% #setting the value for the horizontal line for each individual, with a max value of 19.5 and then descending by rank 
   rowwise() %>% #I don't know why I need this but without it the uniform distribution call below outputs the same value for every row
-  mutate(xval = TimeAlive + runif(1, min = -5, max = 5)) #setting the value for the vertical line for each individual by jittering a small amount from the real TimeAlive value (via sampling from a uniform distribution) 
+  mutate(xval = TimeAlive_conservative + runif(1, min = -5, max = 5)) #setting the value for the vertical line for each individual by jittering a small amount from the real TimeAlive_conservative value (via sampling from a uniform distribution) 
 
 #Making a df with just dead individuals so that I can not plot vertical lines for the individuals that are still alive
-waterfall_plot_df_Dead <- waterfall_plot_df%>%
+waterfall_plot_df_conservative_dead <- waterfall_plot_df_conservative%>%
   filter(Condition == "Dead")
 
-
-waterfall_plot_df %>%
-  ggplot(aes(x = TimeAlive)) +
+waterfall_plot_df_conservative%>%
+  ggplot(aes(x = TimeAlive_conservative)) +
   geom_segment(aes(x = 0, xend = xval, y=yval, yend=yval, color = Condition), linewidth = .25, alpha = .5) + #Makes the horizontal line for each individual
-  geom_segment(data = waterfall_plot_df_Dead, aes(x = xval, xend = xval, y=yval, yend=.5, color = Condition), alpha = .25) + #Makes the vertical (death) line for each individual
+  geom_segment(data = waterfall_plot_df_conservative_dead, aes(x = xval, xend = xval, y=yval, yend=.5, color = Condition), alpha = .25) + #Makes the vertical (death) line for each individual
   scale_color_manual(values = c("darkgreen", "gray")) + #sets the colors for the lines based on the Condition with living inds being green
   ylab("") + 
-  ggtitle('Survivorship') +
+  ggtitle('Survivorship: Conservative') +
   scale_y_continuous(breaks = c(2.5, 16), #adds tick only for Dead and Alive 
                      labels = c('Dead', 'Alive'), 
                      limits = c(0,20)) + #set y lim 
@@ -649,21 +802,96 @@ waterfall_plot_df %>%
   geom_vline(xintercept = (365*2), linetype="dashed", color='red') + #marks 2 years
   theme_classic()
 
+
+
+#LIBERAL
+waterfall_plot_df_liberal<- input_for_df_age %>%
+  mutate_all(~ as.numeric(.)) %>%
+  mutate(Condition = as.factor(case_when(TimeAlive_liberal == PotentialTimeAlive ~ "Alive", 
+                                         TimeAlive_liberal != PotentialTimeAlive ~ "Dead"))) %>% #Add condition back in since I need it to color the lines to differentiate between things which died and things which are still alive
+  mutate(rank = row_number(desc(TimeAlive_liberal))) %>% #Making a column with a ranked value for each individual so I can offset each individual by a small amount on my yaxis AND have the individuals appear in order by longest time alive at the top of the graph  
+  mutate(yval = 19.5 - rank*.0075) %>% #setting the value for the horizontal line for each individual, with a max value of 19.5 and then descending by rank 
+  rowwise() %>% #I don't know why I need this but without it the uniform distribution call below outputs the same value for every row
+  mutate(xval = TimeAlive_liberal + runif(1, min = -5, max = 5)) #setting the value for the vertical line for each individual by jittering a small amount from the real TimeAlive_conservative value (via sampling from a uniform distribution) 
+
+#Making a df with just dead individuals so that I can not plot vertical lines for the individuals that are still alive
+waterfall_plot_df_liberal_dead <- waterfall_plot_df_liberal%>%
+  filter(Condition == "Dead")
+
+waterfall_plot_df_liberal%>%
+  ggplot(aes(x = TimeAlive_liberal)) +
+  geom_segment(aes(x = 0, xend = xval, y=yval, yend=yval, color = Condition), linewidth = .25, alpha = .5) + #Makes the horizontal line for each individual
+  geom_segment(data = waterfall_plot_df_liberal_dead, aes(x = xval, xend = xval, y=yval, yend=.5, color = Condition), alpha = .25) + #Makes the vertical (death) line for each individual
+  scale_color_manual(values = c("darkgreen", "gray")) + #sets the colors for the lines based on the Condition with living inds being green
+  ylab("") + 
+  ggtitle('Survivorship: Liberal') +
+  scale_y_continuous(breaks = c(2.5, 16), #adds tick only for Dead and Alive 
+                     labels = c('Dead', 'Alive'), 
+                     limits = c(0,20)) + #set y lim 
+  scale_x_continuous(name = 'Time since outplanting', 
+                     breaks = c(0, 182.5, 365,
+                                547.5, 730, 912.5), #adds tick marks at 6 month intervals
+                     labels = c('0', '0.5yr', '1yr',
+                                '1.5yrs','2yrs', '2.5yrs')) +
+  geom_vline(xintercept = 0, linetype="dashed", color='red') +  #marks 0 year
+  geom_vline(xintercept = 365, linetype="dashed", color='red') +  #marks 1 year
+  geom_vline(xintercept = (365*2), linetype="dashed", color='red') + #marks 2 years
+  theme_classic()
+
+
+
+
+#MED
+waterfall_plot_df_med<- input_for_df_age %>%
+  mutate_all(~ as.numeric(.)) %>%
+  mutate(Condition = as.factor(case_when(TimeAlive_med == PotentialTimeAlive ~ "Alive", 
+                                         TimeAlive_med != PotentialTimeAlive ~ "Dead"))) %>% #Add condition back in since I need it to color the lines to differentiate between things which died and things which are still alive
+  mutate(rank = row_number(desc(TimeAlive_med))) %>% #Making a column with a ranked value for each individual so I can offset each individual by a small amount on my yaxis AND have the individuals appear in order by longest time alive at the top of the graph  
+  mutate(yval = 19.5 - rank*.0075) %>% #setting the value for the horizontal line for each individual, with a max value of 19.5 and then descending by rank 
+  rowwise() %>% #I don't know why I need this but without it the uniform distribution call below outputs the same value for every row
+  mutate(xval = TimeAlive_med + runif(1, min = -5, max = 5)) #setting the value for the vertical line for each individual by jittering a small amount from the real TimeAlive_med value (via sampling from a uniform distribution) 
+
+#Making a df with just dead individuals so that I can not plot vertical lines for the individuals that are still alive
+waterfall_plot_df_med_dead <- waterfall_plot_df_med%>%
+  filter(Condition == "Dead")
+
+waterfall_plot_df_med%>%
+  ggplot(aes(x = TimeAlive_med)) +
+  geom_segment(aes(x = 0, xend = xval, y=yval, yend=yval, color = Condition), linewidth = .25, alpha = .5) + #Makes the horizontal line for each individual
+  geom_segment(data = waterfall_plot_df_med_dead, aes(x = xval, xend = xval, y=yval, yend=.5, color = Condition), alpha = .25) + #Makes the vertical (death) line for each individual
+  scale_color_manual(values = c("darkgreen", "gray")) + #sets the colors for the lines based on the Condition with living inds being green
+  ylab("") + 
+  ggtitle('Survivorship: Med') +
+  scale_y_continuous(breaks = c(2.5, 16), #adds tick only for Dead and Alive 
+                     labels = c('Dead', 'Alive'), 
+                     limits = c(0,20)) + #set y lim 
+  scale_x_continuous(name = 'Time since outplanting', 
+                     breaks = c(0, 182.5, 365,
+                                547.5, 730, 912.5), #adds tick marks at 6 month intervals
+                     labels = c('0', '0.5yr', '1yr',
+                                '1.5yrs','2yrs', '2.5yrs')) +
+  geom_vline(xintercept = 0, linetype="dashed", color='red') +  #marks 0 year
+  geom_vline(xintercept = 365, linetype="dashed", color='red') +  #marks 1 year
+  geom_vline(xintercept = (365*2), linetype="dashed", color='red') + #marks 2 years
+  theme_classic()
+
+
+
 #How many inds do we start with?
 waterfall_plot_df%>%
-  filter(TimeAlive >= 0)%>%
+  filter(TimeAlive_conservative >= 0)%>%
   nrow()
 #How many inds die immediately?
 waterfall_plot_df%>%
-  filter(TimeAlive == 0)%>%
+  filter(TimeAlive_conservative == 0)%>%
   nrow()
 #How many inds does the leave to continue on?
 waterfall_plot_df%>%
-  filter(TimeAlive > 0)%>%
+  filter(TimeAlive_conservative > 0)%>%
   nrow()
 #How many inds are alive at 1 yr?
 waterfall_plot_df%>%
-  filter(TimeAlive >= (365))%>%
+  filter(TimeAlive_conservative >= (365))%>%
   nrow()
 #How many could have lived to 1yr?
 waterfall_plot_df%>%
@@ -671,7 +899,7 @@ waterfall_plot_df%>%
   nrow()
 #How many inds are alive at 2 yrs?
 waterfall_plot_df%>%
-  filter(TimeAlive >= (365*2))%>%
+  filter(TimeAlive_conservative >= (365*2))%>%
   nrow()
 #How many could have lived to 2yr?
 waterfall_plot_df%>%
@@ -764,6 +992,58 @@ outplanted_seedlings_nov24_aov%>%
                               "1" = "Great")) + #replaces the numeric labels on x axis with Condition class
 theme_classic() +
 theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+
+
+####BOTANY (RE-RUN ANALYSES)####
+
+outplanted_seedlings_nov24%>%
+  filter(!is.na(Canopy_num))%>%
+  ggplot +
+  geom_bar(aes(x = Canopy_num, fill = Region), position = 'fill') +
+  theme_classic()
+
+outplanted_seedlings_nov24%>%
+  filter(!is.na(Canopy_num))%>%
+  ggplot +
+  geom_bar(aes(x= Canopy_num, fill = Ranch), position = 'fill') +
+  scale_fill_manual(values=c("#00BA38", #El Ancon
+                             "#394cb0", #La Rueda
+                             "#124cd0", #La Rueda Palapa
+                             
+                             "#F8766D", #Palo Verdad
+                             "#F95146", #Parque Ecologico Santiago
+                             "#F9a09a", #Rancho San Dioniso
+                             
+                             "#619CFF",#Santa Gertrudis
+                             "#Afcaf8",#Santa Gertrudis (Huerta)
+                             "#114cb0"))+#Santo Domingo
+  theme_classic()
+
+outplanted_seedlings_nov24%>%
+  filter(!is.na(Canopy_num))%>%
+  ggplot +
+  geom_bar(aes(x = Condition_num, fill = Region), position = 'fill') +
+  theme_classic()
+
+
+outplanted_seedlings_nov24%>%
+  filter(!is.na(Canopy_num))%>%
+  ggplot +
+  geom_bar(aes(x= Condition_num, fill = Ranch), position = 'fill') +
+  scale_fill_manual(values=c("#00BA38", #El Ancon
+                             "#394cb0", #La Rueda
+                             "#124cd0", #La Rueda Palapa
+                             
+                             "#F8766D", #Palo Verdad
+                             "#F95146", #Parque Ecologico Santiago
+                             "#F9a09a", #Rancho San Dioniso
+                             
+                             "#619CFF",#Santa Gertrudis
+                             "#Afcaf8",#Santa Gertrudis (Huerta)
+                             "#114cb0"))+#Santo Domingo
+  theme_classic()
+
+
 
 ####EXPLORATORY FIGURES####
 #Height (upper) vs Height (lower)
@@ -1016,10 +1296,10 @@ ggplot() +
   
 
 ####OTHER GRAPHS####
-#TimeAlive per PlantedRegion
+#TimeAlive_conservative per PlantedRegion
 seedlings_clean%>%
   ggplot() +
-  geom_boxplot(aes(x = PlantedReg, y = TimeAlive, fill = PlantedReg)) +
+  geom_boxplot(aes(x = PlantedReg, y = TimeAlive_conservative, fill = PlantedReg)) +
   theme_classic()
 
 #seedling outcome by region of origin
@@ -1073,30 +1353,30 @@ M1_age %>% #planted between 06/22/21 and 02/13/22: 236 days
   geom_step(aes(x = Ratio, y = TotalValue)) +
   xlim(0, 1) +
   ylim(0, 510) +
-  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #400 days
-  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #500 days
-  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #600 days
-  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #700 days
-  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #800 days
-  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #900 days
-  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1000 days
-  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
-  geom_vline(xintercept = 1100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1100 days
-  geom_text(label="1100 days", x=(1100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=500) +
-  geom_vline(xintercept = 1200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1200 days
-  geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=450) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=500) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=450) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=500) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=450) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=500) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=450) +
+  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #700 days
+  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=500) +
+  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #800 days
+  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=450) +
+  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #900 days
+  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=500) +
+  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #1000 days
+  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=450) +
+  geom_vline(xintercept = 1100/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #1100 days
+  geom_text(label="1100 days", x=(1100/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=500) +
+  geom_vline(xintercept = 1200/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #1200 days
+  geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=450) +
   theme_classic()
 
 #y = percent
@@ -1105,30 +1385,30 @@ M1_age %>%
   ggtitle("M1") +
   geom_step(aes(x = Ratio, y = PercValue)) +
   ylim(0, 1) +
-  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #100 days
-  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #200 days
-  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #300 days
-  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #400 days
-  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #500 days
-  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #600 days
-  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #700 days
-  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #800 days
-  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #900 days
-  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1000 days
-  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
-  geom_vline(xintercept = 1100/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1100 days
-  geom_text(label="1100 days", x=(1100/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=1) +
-  geom_vline(xintercept = 1200/as.numeric(max(seedlings_clean_M1$TimeAlive)), linetype="dashed") + #1200 days
-  geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive))), y=0.8) +
+  geom_vline(xintercept = 100/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #100 days
+  geom_text(label="100 days", x=(100/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=1) +
+  geom_vline(xintercept = 200/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #200 days
+  geom_text(label="200 days", x=(200/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=0.8) +
+  geom_vline(xintercept = 300/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #300 days
+  geom_text(label="300 days", x=(300/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=1) +
+  geom_vline(xintercept = 400/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #400 days
+  geom_text(label="400 days", x=(400/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=0.8) +
+  geom_vline(xintercept = 500/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #500 days
+  geom_text(label="500 days", x=(500/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=1) +
+  geom_vline(xintercept = 600/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #600 days
+  geom_text(label="600 days", x=(600/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=0.8) +
+  geom_vline(xintercept = 700/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #700 days
+  geom_text(label="700 days", x=(700/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=1) +
+  geom_vline(xintercept = 800/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #800 days
+  geom_text(label="800 days", x=(800/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=0.8) +
+  geom_vline(xintercept = 900/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #900 days
+  geom_text(label="900 days", x=(900/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=1) +
+  geom_vline(xintercept = 1000/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #1000 days
+  geom_text(label="1000 days", x=(1000/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=0.8) +
+  geom_vline(xintercept = 1100/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #1100 days
+  geom_text(label="1100 days", x=(1100/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=1) +
+  geom_vline(xintercept = 1200/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative)), linetype="dashed") + #1200 days
+  geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=0.8) +
   theme_classic()
 
 ####TROUBLESHOOTING####
@@ -1159,7 +1439,7 @@ df_age_watered <-
 
 for (i in 1:nrow(df_age)) {
   Day <- df_age_watered$Days[i]
-  Num_seedlings_alive <- sum(Day <= seedlings_clean_watered$TimeAlive, na.rm = TRUE)
+  Num_seedlings_alive <- sum(Day <= seedlings_clean_watered$TimeAlive_conservative, na.rm = TRUE)
   df_age_watered$TotalAlive[i] <- paste0(Num_seedlings_alive)
 }
 df_age_watered_final <- df_age_watered%>%
@@ -1183,7 +1463,7 @@ df_age_unwatered <-
 
 for (i in 1:nrow(df_age)) {
   Day <- df_age_unwatered$Days[i]
-  Num_seedlings_alive <- sum(Day <= seedlings_clean_unwatered$TimeAlive, na.rm = TRUE)
+  Num_seedlings_alive <- sum(Day <= seedlings_clean_unwatered$TimeAlive_conservative, na.rm = TRUE)
   df_age_unwatered$TotalAlive[i] <- paste0(Num_seedlings_alive)
 }
 
@@ -1212,3 +1492,13 @@ df_age_for_plotting %>%
   ggplot(aes(x = Days, y = PercentAlive, color = data_type)) +
   geom_step() +
   theme_classic()
+
+
+####EXAMPLE: MAKING A FUNCTION####
+adding <- function(num_1, num_2){
+  num_1+num_2
+  num_3 = num_1+num_2
+  return(num_3)
+}
+
+adding(1, 2)
