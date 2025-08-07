@@ -540,13 +540,13 @@ outplanted_seedlings_nov24%>%
              upper = list(combo = "blank"))
 
 outplanted_seedlings_nov24_aov <- outplanted_seedlings_nov24%>%
-  filter(!is.na(TimeAlive_conservativeNum))%>%
+  filter(!is.na(TimeAlive_conservative))%>%
   mutate(Ranch=recode(Ranch, 'La Rueda (Palapa)' = 'La Rueda'))%>%
   mutate(Height_lower=as.numeric(Height_lower))%>%
   mutate(Height_upper=as.numeric(Height_upper))%>%
   
-  mutate(Height_lower_standardized=Height_lower/TimeAlive_conservativeNum)%>%
-  mutate(Height_upper_standardized=Height_upper/TimeAlive_conservativeNum)%>%
+  mutate(Height_lower_standardized=Height_lower/TimeAlive_conservative)%>%
+  mutate(Height_upper_standardized=Height_upper/TimeAlive_conservative)%>%
   
   mutate(Canopy_num = as.factor(Canopy_num))%>%
   mutate(Condition_num = as.factor(Condition_num))%>%
@@ -994,20 +994,42 @@ theme_classic() +
 theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
 
 
-####BOTANY (RE-RUN ANALYSES)####
+####PRE-BOTANY (RE-RUN ANALYSES)####
 
+#stacked bar charts- Region
 outplanted_seedlings_nov24%>%
   filter(!is.na(Canopy_num))%>%
   ggplot +
   geom_bar(aes(x = Canopy_num, fill = Region), position = 'fill') +
+  ggtitle('# of individuals in each canopy class \n displayed by Region') +
+  xlab('Canopy class') +
+  scale_x_discrete(labels = c("0" = "Full shade", 
+                              "0.25" = "Mostly shade", 
+                              "0.5" = "Partial sun", 
+                              "0.75" = "Mostly sun", 
+                              "1" = "Full sun")) +
+  ylab('proportion of individuals') +
   theme_classic()
+
+?relevel
+#stacked bar charts- Region
+outplanted_seedlings_nov24$Ranch <- as.factor(outplanted_seedlings_nov24$Ranch)
+outplanted_seedlings_nov24$Region <- as.factor(outplanted_seedlings_nov24$Region)
+levels(outplanted_seedlings_nov24$Region)
+
+outplanted_seedlings_nov24$Region <- relevel(outplanted_seedlings_nov24$Region, ref = "E")
+summary(outplanted_seedlings_nov24)
+
+
 
 outplanted_seedlings_nov24%>%
   filter(!is.na(Canopy_num))%>%
+  
   ggplot +
   geom_bar(aes(x= Canopy_num, fill = Ranch), position = 'fill') +
+  ggtitle('# of individuals per Canopy class, \n divided by Ranch') +
   scale_fill_manual(values=c("#00BA38", #El Ancon
-                             "#394cb0", #La Rueda
+                             "#494cb0", #La Rueda
                              "#124cd0", #La Rueda Palapa
                              
                              "#F8766D", #Palo Verdad
@@ -1017,12 +1039,28 @@ outplanted_seedlings_nov24%>%
                              "#619CFF",#Santa Gertrudis
                              "#Afcaf8",#Santa Gertrudis (Huerta)
                              "#114cb0"))+#Santo Domingo
+  
+  ylab('proportion of individuals') +
+  xlab('Canopy class') +
+  scale_x_discrete(labels = c("0" = "Full shade", 
+                              "0.25" = "Mostly shade", 
+                              "0.5" = "Partial sun", 
+                              "0.75" = "Mostly sun", 
+                              "1" = "Full sun")) +
   theme_classic()
 
 outplanted_seedlings_nov24%>%
   filter(!is.na(Canopy_num))%>%
   ggplot +
   geom_bar(aes(x = Condition_num, fill = Region), position = 'fill') +
+  ggtitle('Region of individuals in each condition class') +
+  ylab('Proportion of individuals') +
+  xlab('Seedling condition') +
+  scale_x_discrete(labels = c("0" = "Dead", 
+                              "0.25" = "Poor", 
+                              "0.5" = "Fine", 
+                              "0.75" = "Good", 
+                              "1" = "Great")) +
   theme_classic()
 
 
@@ -1030,6 +1068,14 @@ outplanted_seedlings_nov24%>%
   filter(!is.na(Canopy_num))%>%
   ggplot +
   geom_bar(aes(x= Condition_num, fill = Ranch), position = 'fill') +
+  ggtitle('Ranch of individuals in each condition class') +
+  xlab('Seedling condition') +
+  ylab('Proportion of individuals') +
+  scale_x_discrete(labels = c("0" = "Dead", 
+                              "0.25" = "Poor", 
+                              "0.5" = "Fine", 
+                              "0.75" = "Good", 
+                              "1" = "Great")) +
   scale_fill_manual(values=c("#00BA38", #El Ancon
                              "#394cb0", #La Rueda
                              "#124cd0", #La Rueda Palapa
@@ -1169,7 +1215,7 @@ map <- basemap_terra(ext = bcs_ext)%>%
 #plots our data points on the basemap
 ggplot() +
   geom_spatraster_rgb(data = map) +
-  geom_point(data = outplanted_seedlings_mapping, shape=21, aes(x = `W`, y = `N`, color = "black", fill = Region), size = 7) +
+  geom_point(data = outplanted_seedlings_mapping, shape=21, aes(x = `W`, y = `N`, color = "black", fill = Region), size = 11) +
   scale_fill_manual(values=c('#e65100','#558b2f', 'gray','#0288d1'))+
   scale_color_manual(values = "black") +
   coord_sf(crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") +
@@ -1183,7 +1229,7 @@ ggplot() +
         axis.ticks.y=element_blank(),
         legend.position = "none")
 
-#ggsave("./figures/commsmap7.png", width = 8, height = 12, units = "in")
+#ggsave("./figures/commsmap11.png", width = 8, height = 10.5, units = "in")
 
 
 
@@ -1255,7 +1301,7 @@ set_defaults(map_service = "esri", map_type = "world_imagery")
 #Map of all historically planted seedlings
 ggplot() +
   geom_spatraster_rgb(data = map_all)+
-  geom_point(data = fixed_deg_dec, shape=21, aes(x = long, y = lat, color = "black", fill = PlantedReg), size = 4) +
+  geom_point(data = fixed_deg_dec, shape=21, aes(x = long, y = lat, color = "black", fill = PlantedReg), size = 6) +
   scale_color_manual(values = "black") +
   scale_fill_manual(values=c('#e65100','#558b2f', 'gray','#0288d1'))+
   coord_sf(crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") +
@@ -1269,7 +1315,7 @@ ggplot() +
         axis.ticks.y=element_blank(),
         legend.position = "none")
 
-#ggsave("./figures/commsmap_all.png", width = 9, height = 12, units = "in")
+ggsave("./figures/commsmap_all6.png", width = 8.5, height = 12, units = "in")
 
 
 #comparing locations of ALIVE & DEAD seedlings
