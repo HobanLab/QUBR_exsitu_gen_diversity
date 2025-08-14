@@ -10,7 +10,7 @@ Imports data from Daniel’s database (2023 and 2024 tabs) on 1927 adopted seedl
 #### Data Cleaning
 ##### [Daniel’s database](https://docs.google.com/spreadsheets/d/16GrmfPXmfTAl9oViUIs21HwsK6D_JKxI/edit?gid=1732693285#gid=1732693285)
 - The script renames columns to simplified versions in English.
-- Calculates a DateDied (conservative, median, and liberal versions) based on different assumptions of how quickly a seedling died after its last positive ID.
+- Calculates a DateDied (conservative, median, and liberal versions) based on different assumptions of how quickly a seedling died after its last positive ID
 - Calculates a TimeAlive (conservative, median, and liberal) for each seedling 
 - Calculates a PotentialTimeAlive of how long each seedling has been planted for
 - Identifies an Outcome of whether each seedling is Dead or Alive
@@ -34,15 +34,27 @@ Imports data from Daniel’s database (2023 and 2024 tabs) on 1927 adopted seedl
 
 #### Chi-Squared Test
 
-#### Post Hoc Test
-
 #### Interval Regression
 
 #### Ordinal Regression
+- Analyzed Condition and Canopy variables (with and without dead individuals included)
+- Found that the best explanatory model includes Canopy and Ranch
 
 #### Poster Figures
+- Figures that were used in presentations and on conference poster
+  - Survivorship curve
+  - Waterfall survivorship figure (conservative, median, liberal interpretations of DateDied): preferred alternative to Survivorship curve
+  - Comparing the Frequency of each Condition of seedlings faceted by Ranch
+  - Comparing the Frequency of each Condition of seedlings faceted by Canopy
+  - Stacked bar charts
+    - number of individuals in each Canopy class, colored by Region
+    - number of individuals in each Canopy class, colored by Ranch & Region
+    - number of individuals in each Condition class, colored by Region
+    - number of individuals in each Condition class, colored by Ranch & Region
 
 #### Maps
+- Distribution of individuals alive as of November 2024
+- Distribution of all individuals historically outplanted
 
 
 
