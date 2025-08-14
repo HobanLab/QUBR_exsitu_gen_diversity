@@ -29,10 +29,12 @@ Imports data from Daniel’s database (2023 and 2024 tabs) on 1927 adopted seedl
 - We ended up not using the survivorship curve in analysis and replaced it with a waterfall figure
 
 #### Functionalized For Loop
+- This is another way of creating the Survivorship for loop using less lines of code
 
 #### Visualizing Outliers
 
 #### Chi-Squared Test
+- Is there any significance to whether a seedling was watered after planting on overall survivorship?
 
 #### Interval Regression
 
