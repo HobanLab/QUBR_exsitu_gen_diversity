@@ -246,7 +246,7 @@ seedlings_clean_joined <- outplanted_seedlings_nov24%>%
   left_join(seedlings_clean, ., by = 'MetalTagID')%>%
 
 #Adding to previous Outcome in seedlings_clean
-  mutate(Outcome = case_when(Monitor4 == 'Nueva' | Monitor4 == 'Viva' ~ 'Alive',
+  mutate(Outcome = case_when((Monitor4 == 'Nueva' | Monitor4 == 'Viva') ~ 'Alive',
                             (Monitor1 == 'Muerta' | Monitor2 == 'Muerta' | Monitor3 == 'Muerta' | Monitor4 == 'Muerta') ~ 'Dead',
                              is.na(Monitor4) ~ 'Presumed Dead'))%>%
   
@@ -255,19 +255,22 @@ seedlings_clean_joined <- outplanted_seedlings_nov24%>%
   mutate(DateDied_conservative = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) & is.na(Monitor4)) | Monitor1 == 'Muerta' ~ (DatePlanted),
                                            ((Monitor1 == 'Viva' | Monitor1 == 'Nueva') & (Monitor2 == 'Muerta') | is.na(Monitor2)) ~ (Monitor1Date+1),
                                            ((Monitor2 == 'Viva' | Monitor2 == 'Nueva') & (Monitor3 == 'Muerta') | is.na(Monitor3)) ~ (Monitor2Date+1),
-                                           ((Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta') | is.na(Monitor4)) ~ (Monitor3Date+1)))%>%
+                                           ((Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta') | is.na(Monitor4)) ~ (Monitor3Date+1),
+                                           (Monitor4 == 'Viva' | Monitor4 == 'Nueva') ~ NA_character_))%>%
   
 #DateDied_liberal is the day before it is observed Dead
   mutate(DateDied_liberal = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) & is.na(Monitor4)) | Monitor1 == 'Muerta' ~ Monitor1Date-1,
                                            (Monitor1 == 'Viva' | Monitor1 == 'Nueva') & (Monitor2 == 'Muerta' | is.na(Monitor2)) ~ Monitor2Date-1,
                                            (Monitor2 == 'Viva' | Monitor2 == 'Nueva') & (Monitor3 == 'Muerta' | is.na(Monitor3)) ~ Monitor3Date-1,
-                                           (Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta' | is.na(Monitor4)) ~ Monitor4Date-1))%>%
+                                           (Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta' | is.na(Monitor4)) ~ Monitor4Date-1,
+                                          (Monitor4 == 'Viva' | Monitor4 == 'Nueva') ~ NA_character_))%>%
   
 #DateDied_med is the mid-point between Monitoring dates
   mutate(DateDied_med = case_when((is.na(Monitor1) & is.na(Monitor2) & is.na(Monitor3) & is.na(Monitor4)) | Monitor1 == 'Muerta' ~ date(int_end(interval((DatePlanted), Monitor1Date)/2)),
                                       (Monitor1 == 'Viva' | Monitor1 == 'Nueva') & (Monitor2 == 'Muerta' | is.na(Monitor2)) ~ date(int_end(interval(Monitor1Date, Monitor2Date)/2)),
                                       (Monitor2 == 'Viva' | Monitor2 == 'Nueva') & (Monitor3 == 'Muerta' | is.na(Monitor3)) ~ date(int_end(interval(Monitor2Date, Monitor3Date)/2)),
-                                      (Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta' | is.na(Monitor4)) ~ date(int_end(interval(Monitor3Date, Monitor4Date)/2))))%>%
+                                      (Monitor3 == 'Viva' | Monitor3 == 'Nueva') & (Monitor4 == 'Muerta' | is.na(Monitor4)) ~ date(int_end(interval(Monitor3Date, Monitor4Date)/2)),
+                                  (Monitor4 == 'Viva' | Monitor4 == 'Nueva') ~ NA_character_))%>%
   
   #If TimeAlive_conservative is negative because DatePlanted occurs after DateDied_conservative, use DatePlanted; otherwise default to DateDied_conservative
   mutate(DateDied_conservative = case_when(DateDied_conservative <= DatePlanted ~ DatePlanted, .default = DateDied_conservative))%>%
@@ -773,6 +776,28 @@ show_ages <- seedlings_clean_joined%>%
 
 
 #WATERFALL: ALTERNATIVE TO SURVIVORSHIP CURVE
+
+temp <- input_for_df_age%>%
+  mutate_all(~ as.numeric(.)) %>%
+  mutate(Condition = as.factor(case_when(TimeAlive_conservative == PotentialTimeAlive ~ "Alive", 
+                                         TimeAlive_conservative != PotentialTimeAlive ~ "Dead")))%>%
+  filter(Condition == "Alive")
+
+
+temp2 <- seedlings_clean%>%
+  select(c("DatePlanted", "DateDied_conservative", "DateDied_liberal", "DateDied_med", "TimeAlive_conservative", "TimeAlive_liberal", "TimeAlive_med", "PotentialTimeAlive"))%>%
+  mutate(Condition = as.factor(case_when(TimeAlive_conservative == PotentialTimeAlive ~ "Alive", 
+                                         TimeAlive_conservative != PotentialTimeAlive ~ "Dead")))%>%
+  filter(Condition == "Alive")
+
+temp3 <- seedlings_clean_joined %>%
+  select(c("DatePlanted", "DateDied_conservative", "DateDied_liberal", "DateDied_med", "TimeAlive_conservative", "TimeAlive_liberal", "TimeAlive_med", "PotentialTimeAlive"))%>%
+  mutate(Condition = as.factor(case_when(TimeAlive_conservative == PotentialTimeAlive ~ "Alive", 
+                                         TimeAlive_conservative != PotentialTimeAlive ~ "Dead")))%>%
+  filter(Condition == "Alive")
+  
+  
+
 
 #CONSERVATIVE
 waterfall_plot_df_conservative<- input_for_df_age %>%
