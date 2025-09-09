@@ -323,6 +323,7 @@ outplanted_seedlings_nov24 <- outplanted_seedlings_nov24%>%
 
 ####FOR LOOP: SURVIVORSHIP CURVE####
 #creating a df with increments of 1 day to represent how old a seedling could be
+
 #not represented in Daniel's dataset, but that we found and can encorporate into survivorship curve
 nov24_notindaniel <- outplanted_seedlings_nov24%>%
   filter(MetalTagID %notin% seedlings_clean_joined$MetalTagID)%>%
@@ -396,7 +397,7 @@ df_age_ratio_perc <- df_age_ratio%>%
   mutate(PercValue = TotalValue/max(TotalValue, na.rm = TRUE))
 
 
-#I used this figure for my RaMP presentation
+#I used this figure for my RaMP research update presentation
 df_age_ratio %>% #curve shown with y = raw values
   ggplot()+
   geom_step(aes(x = Ratio, y = TotalValue)) +
@@ -411,7 +412,7 @@ df_age_ratio_perc %>% #curve shown with y = percentage
   ylim(0, 1) +
   xlab('Realized time alive / Potential time alive') +
   ylab('% of individuals') +
-  ggtitle("seedlings_clean_joined: %") +
+  ggtitle("Rate of death over time in outplanted seedlings") +
   theme_classic()
 
 ####CONVERTING FOR LOOP TO FUNCTION####
@@ -521,14 +522,13 @@ PlantedRegion_outcome = table(seedlings_clean_joined$Outcome, seedlings_clean_jo
 print(PlantedRegion_outcome)
 print(chisq.test(PlantedRegion_outcome))
 
-####POST HOC TEST####
+#Post Hoc test
 chisq.posthoc.test(OriginRegion_outcome)
 chisq.posthoc.test(PlantedRegion_outcome)
 chisq.posthoc.test(watered_data)
 
 
-#export .csv to make Google Map of sites
-#write.csv(priority_sites, "priority_sites.csv")
+
 
 ####INTERVAL REGRESSION####
 # bivariate plots
@@ -561,7 +561,10 @@ ggpairs(outplanted_seedlings_nov24_aov, lower = list(combo = "box"), upper = lis
 summary(aov(data=outplanted_seedlings_nov24_aov, Height_upper_standardized ~ Canopy_num + Ranch + Region))
 summary(aov(data=outplanted_seedlings_nov24_aov, Height_lower_standardized ~ Canopy_num + Ranch + Region))
 
-####ORDINAL REGRESSION- WITH DEAD####
+####ORDINAL REGRESSION####
+
+#INCLUDING DEAD INDS
+
 #data exploration pre analysis
 outplanted_seedlings_nov24_for_analysis <- outplanted_seedlings_nov24%>%
   filter(!is.na(Canopy_num))%>% #making a dataset with no na's so that dredge can run
@@ -640,7 +643,10 @@ sf <- function(y) {
 (s <- with(outplanted_seedlings_nov24, summary(as.numeric(Condition_num) ~ Region + Canopy_num, fun=sf)))
 
 
-####ORDINAL REGRESSION- WITHOUT DEAD####
+
+
+#DEAD INDS EXCLUDED
+
 #data exploration pre analysis
 
 outplanted_seedlings_nov24_for_analysis_no_dead <- outplanted_seedlings_nov24%>%
@@ -666,24 +672,6 @@ full_model <- polr(Condition_num ~ Canopy_num + Ranch + Region, data = outplante
 dredge(full_model)
 #below is the output within 3 AIC points (best models) --> we will need to examine all of them to see if there are differences in interpretation among them
 
-#WITH DEAD
-# Model selection table 
-#   (Int) Cnp_num Rnc Rgn df   logLik  AICc delta weight
-# 3     +           +     11 -196.884 417.6  0.00  0.330
-# 5     +               +  6 -202.728 418.0  0.40  0.270
-# 6     +       +       + 10 -198.640 418.8  1.19  0.182
-# 4     +       +   +     15 -193.179 419.8  2.21  0.109
-# 8     +       +   +   + 15 -193.179 419.8  2.21  0.109
-
-#WITHOUT DEAD
-
-# Model selection table 
-#   (Int) Cnp_num Rnc Rgn df   logLik  AICc delta weight
-# 4     +       +   +     14 -167.900 367.0  0.00  0.251
-# 8     +       +   +   + 14 -167.900 367.0  0.00  0.251
-# 3     +           +     10 -172.711 367.0  0.07  0.242
-# 6     +       +       +  9 -174.231 367.8  0.81  0.168
-# 5     +               +  5 -179.316 369.1  2.10  0.088
 
 #results suggest that we have two best models, 1. canopy and ranch, 2. all three
 
@@ -733,9 +721,27 @@ sf <- function(y) {
 }
 (s <- with(outplanted_seedlings_nov24, summary(as.numeric(Condition_num) ~ Region + Canopy_num, fun=sf)))
 
+#WITH DEAD
+# Model selection table 
+#   (Int) Cnp_num Rnc Rgn df   logLik  AICc delta weight
+# 3     +           +     11 -196.884 417.6  0.00  0.330
+# 5     +               +  6 -202.728 418.0  0.40  0.270
+# 6     +       +       + 10 -198.640 418.8  1.19  0.182
+# 4     +       +   +     15 -193.179 419.8  2.21  0.109
+# 8     +       +   +   + 15 -193.179 419.8  2.21  0.109
+
+#WITHOUT DEAD
+
+# Model selection table 
+#   (Int) Cnp_num Rnc Rgn df   logLik  AICc delta weight
+# 4     +       +   +     14 -167.900 367.0  0.00  0.251
+# 8     +       +   +   + 14 -167.900 367.0  0.00  0.251
+# 3     +           +     10 -172.711 367.0  0.07  0.242
+# 6     +       +       +  9 -174.231 367.8  0.81  0.168
+# 5     +               +  5 -179.316 369.1  2.10  0.088
 
 
-####CPC POSTER FIGURES####
+####POSTER FIGURES####
 
 #SURVIVORSHIP CURVE (marked at 1 yr and 2 yrs)
 df_age_final%>%
@@ -772,7 +778,8 @@ show_ages <- seedlings_clean_joined%>%
 waterfall_plot_df_conservative<- input_for_df_age %>%
   mutate_all(~ as.numeric(.)) %>%
   mutate(Condition = as.factor(case_when(TimeAlive_conservative == PotentialTimeAlive ~ "Alive", 
-                                         TimeAlive_conservative != PotentialTimeAlive ~ "Dead"))) %>% #Add condition back in since I need it to color the lines to differentiate between things which died and things which are still alive
+                                         TimeAlive_conservative != PotentialTimeAlive ~ "Dead"))) %>% 
+  #Add condition back in since I need it to color the lines to differentiate between things which died and things which are still alive
   mutate(rank = row_number(desc(TimeAlive_conservative))) %>% #Making a column with a ranked value for each individual so I can offset each individual by a small amount on my yaxis AND have the individuals appear in order by longest time alive at the top of the graph  
   mutate(yval = 19.5 - rank*.0075) %>% #setting the value for the horizontal line for each individual, with a max value of 19.5 and then descending by rank 
   rowwise() %>% #I don't know why I need this but without it the uniform distribution call below outputs the same value for every row
@@ -794,50 +801,11 @@ waterfall_plot_df_conservative%>%
                      limits = c(0,20)) + #set y lim 
   scale_x_continuous(name = 'Time since outplanting', 
                      breaks = c(0, 182.5, 365,
-                                547.5, 730, 912.5), #adds tick marks at 6 month intervals
+                                547.5, 730, 912.5, 1095), #adds tick marks at 6 month intervals
                      labels = c('0', '0.5yr', '1yr',
-                                '1.5yrs','2yrs', '2.5yrs')) +
-  geom_vline(xintercept = 0, linetype="dashed", color='red') +  #marks 0 year
-  geom_vline(xintercept = 365, linetype="dashed", color='red') +  #marks 1 year
-  geom_vline(xintercept = (365*2), linetype="dashed", color='red') + #marks 2 years
+                                '1.5yrs','2yrs', '2.5yrs', '3yrs')) +
+  geom_vline(xintercept = c(0, 365, (365*2), (365*3)), linetype="dashed", color='red') +
   theme_classic()
-
-
-
-#LIBERAL
-waterfall_plot_df_liberal<- input_for_df_age %>%
-  mutate_all(~ as.numeric(.)) %>%
-  mutate(Condition = as.factor(case_when(TimeAlive_liberal == PotentialTimeAlive ~ "Alive", 
-                                         TimeAlive_liberal != PotentialTimeAlive ~ "Dead"))) %>% #Add condition back in since I need it to color the lines to differentiate between things which died and things which are still alive
-  mutate(rank = row_number(desc(TimeAlive_liberal))) %>% #Making a column with a ranked value for each individual so I can offset each individual by a small amount on my yaxis AND have the individuals appear in order by longest time alive at the top of the graph  
-  mutate(yval = 19.5 - rank*.0075) %>% #setting the value for the horizontal line for each individual, with a max value of 19.5 and then descending by rank 
-  rowwise() %>% #I don't know why I need this but without it the uniform distribution call below outputs the same value for every row
-  mutate(xval = TimeAlive_liberal + runif(1, min = -5, max = 5)) #setting the value for the vertical line for each individual by jittering a small amount from the real TimeAlive_conservative value (via sampling from a uniform distribution) 
-
-#Making a df with just dead individuals so that I can not plot vertical lines for the individuals that are still alive
-waterfall_plot_df_liberal_dead <- waterfall_plot_df_liberal%>%
-  filter(Condition == "Dead")
-
-waterfall_plot_df_liberal%>%
-  ggplot(aes(x = TimeAlive_liberal)) +
-  geom_segment(aes(x = 0, xend = xval, y=yval, yend=yval, color = Condition), linewidth = .25, alpha = .5) + #Makes the horizontal line for each individual
-  geom_segment(data = waterfall_plot_df_liberal_dead, aes(x = xval, xend = xval, y=yval, yend=.5, color = Condition), alpha = .25) + #Makes the vertical (death) line for each individual
-  scale_color_manual(values = c("darkgreen", "gray")) + #sets the colors for the lines based on the Condition with living inds being green
-  ylab("") + 
-  ggtitle('Survivorship: Liberal') +
-  scale_y_continuous(breaks = c(2.5, 16), #adds tick only for Dead and Alive 
-                     labels = c('Dead', 'Alive'), 
-                     limits = c(0,20)) + #set y lim 
-  scale_x_continuous(name = 'Time since outplanting', 
-                     breaks = c(0, 182.5, 365,
-                                547.5, 730, 912.5), #adds tick marks at 6 month intervals
-                     labels = c('0', '0.5yr', '1yr',
-                                '1.5yrs','2yrs', '2.5yrs')) +
-  geom_vline(xintercept = 0, linetype="dashed", color='red') +  #marks 0 year
-  geom_vline(xintercept = 365, linetype="dashed", color='red') +  #marks 1 year
-  geom_vline(xintercept = (365*2), linetype="dashed", color='red') + #marks 2 years
-  theme_classic()
-
 
 
 
@@ -867,42 +835,79 @@ waterfall_plot_df_med%>%
                      limits = c(0,20)) + #set y lim 
   scale_x_continuous(name = 'Time since outplanting', 
                      breaks = c(0, 182.5, 365,
-                                547.5, 730, 912.5), #adds tick marks at 6 month intervals
+                                547.5, 730, 912.5, 1095, 1227.5), #adds tick marks at 6 month intervals
                      labels = c('0', '0.5yr', '1yr',
-                                '1.5yrs','2yrs', '2.5yrs')) +
-  geom_vline(xintercept = 0, linetype="dashed", color='red') +  #marks 0 year
-  geom_vline(xintercept = 365, linetype="dashed", color='red') +  #marks 1 year
-  geom_vline(xintercept = (365*2), linetype="dashed", color='red') + #marks 2 years
+                                '1.5yrs','2yrs', '2.5yrs', '3yrs', '3.5yrs')) +
+  geom_vline(xintercept = c(0, 365, (365*2), (365*3)), linetype="dashed", color='red') +
   theme_classic()
 
 
+#LIBERAL
+waterfall_plot_df_liberal<- input_for_df_age %>%
+  mutate_all(~ as.numeric(.)) %>%
+  mutate(Condition = as.factor(case_when(TimeAlive_liberal == PotentialTimeAlive ~ "Alive", 
+                                         TimeAlive_liberal != PotentialTimeAlive ~ "Dead"))) %>% #Add condition back in since I need it to color the lines to differentiate between things which died and things which are still alive
+  mutate(rank = row_number(desc(TimeAlive_liberal))) %>% #Making a column with a ranked value for each individual so I can offset each individual by a small amount on my yaxis AND have the individuals appear in order by longest time alive at the top of the graph  
+  mutate(yval = 19.5 - rank*.0075) %>% #setting the value for the horizontal line for each individual, with a max value of 19.5 and then descending by rank 
+  rowwise() %>% #I don't know why I need this but without it the uniform distribution call below outputs the same value for every row
+  mutate(xval = TimeAlive_liberal + runif(1, min = -5, max = 5)) #setting the value for the vertical line for each individual by jittering a small amount from the real TimeAlive_conservative value (via sampling from a uniform distribution) 
+
+#Making a df with just dead individuals so that I can not plot vertical lines for the individuals that are still alive
+waterfall_plot_df_liberal_dead <- waterfall_plot_df_liberal%>%
+  filter(Condition == "Dead")
+
+waterfall_plot_df_liberal%>%
+  ggplot(aes(x = TimeAlive_liberal)) +
+  geom_segment(aes(x = 0, xend = xval, y=yval, yend=yval, color = Condition), linewidth = .25, alpha = .5) + #Makes the horizontal line for each individual
+  geom_segment(data = waterfall_plot_df_liberal_dead, aes(x = xval, xend = xval, y=yval, yend=.5, color = Condition), alpha = .25) + #Makes the vertical (death) line for each individual
+  scale_color_manual(values = c("darkgreen", "gray")) + #sets the colors for the lines based on the Condition with living inds being green
+  ylab("") + 
+  ggtitle('Survivorship: Liberal') +
+  scale_y_continuous(breaks = c(2.5, 16), #adds tick only for Dead and Alive 
+                     labels = c('Dead', 'Alive'), 
+                     limits = c(0,20)) + #set y lim 
+  scale_x_continuous(name = 'Time since outplanting', 
+                     breaks = c(0, 182.5, 365,
+                                547.5, 730, 912.5, 1095, 1277.5), #adds tick marks at 6 month intervals
+                     labels = c('0', '0.5yr', '1yr',
+                                '1.5yrs','2yrs', '2.5yrs', '3yrs', '3.5yrs')) +
+  geom_vline(xintercept = c(0, 365, (365*2), (365*3)), linetype="dashed", color='red') +
+  theme_classic()
+
+
+#For annotating the waterfall figure:
 
 #How many inds do we start with?
-waterfall_plot_df%>%
-  filter(TimeAlive_conservative >= 0)%>%
-  nrow()
+inds_start <- waterfall_plot_df_conservative%>%
+  filter(TimeAlive_conservative >= 0)
+nrow(inds_start)
 #How many inds die immediately?
-waterfall_plot_df%>%
-  filter(TimeAlive_conservative == 0)%>%
-  nrow()
+inds_die_immediate <- waterfall_plot_df_conservative%>%
+  filter(TimeAlive_conservative == 0)
+nrow(inds_die_immediate)
+#What proportion of inds die immediately?
+nrow(inds_die_immediate)/nrow(inds_start)
+
+
 #How many inds does the leave to continue on?
-waterfall_plot_df%>%
+waterfall_plot_df_conservative%>%
   filter(TimeAlive_conservative > 0)%>%
   nrow()
+
 #How many inds are alive at 1 yr?
-waterfall_plot_df%>%
+waterfall_plot_df_conservative%>%
   filter(TimeAlive_conservative >= (365))%>%
   nrow()
 #How many could have lived to 1yr?
-waterfall_plot_df%>%
+waterfall_plot_df_conservative%>%
   filter(PotentialTimeAlive >= (365))%>%
   nrow()
 #How many inds are alive at 2 yrs?
-waterfall_plot_df%>%
+waterfall_plot_df_conservative%>%
   filter(TimeAlive_conservative >= (365*2))%>%
   nrow()
 #How many could have lived to 2yr?
-waterfall_plot_df%>%
+waterfall_plot_df_conservative%>%
   filter(PotentialTimeAlive >= (365*2))%>%
   nrow()
 
@@ -994,7 +999,7 @@ theme_classic() +
 theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
 
 
-####PRE-BOTANY (RE-RUN ANALYSES)####
+#RE-RUNNING ANALYSES: PRE-BOTANY
 
 #stacked bar charts- Region
 outplanted_seedlings_nov24%>%
@@ -1011,8 +1016,7 @@ outplanted_seedlings_nov24%>%
   ylab('proportion of individuals') +
   theme_classic()
 
-?relevel
-#stacked bar charts- Region
+#stacked bar charts- Region & Canopy
 outplanted_seedlings_nov24$Ranch <- as.factor(outplanted_seedlings_nov24$Ranch)
 outplanted_seedlings_nov24$Region <- as.factor(outplanted_seedlings_nov24$Region)
 levels(outplanted_seedlings_nov24$Region)
@@ -1021,10 +1025,9 @@ outplanted_seedlings_nov24$Region <- relevel(outplanted_seedlings_nov24$Region, 
 summary(outplanted_seedlings_nov24)
 
 
-
+#Unique colors for each Ranch- Region & Canopy
 outplanted_seedlings_nov24%>%
   filter(!is.na(Canopy_num))%>%
-  
   ggplot +
   geom_bar(aes(x= Canopy_num, fill = Ranch), position = 'fill') +
   ggtitle('# of individuals per Canopy class, \n divided by Ranch') +
@@ -1049,6 +1052,7 @@ outplanted_seedlings_nov24%>%
                               "1" = "Full sun")) +
   theme_classic()
 
+#stacked bar chart- Region & Condition
 outplanted_seedlings_nov24%>%
   filter(!is.na(Canopy_num))%>%
   ggplot +
@@ -1063,7 +1067,7 @@ outplanted_seedlings_nov24%>%
                               "1" = "Great")) +
   theme_classic()
 
-
+#Unique colors for each Ranch- Region & Condition
 outplanted_seedlings_nov24%>%
   filter(!is.na(Canopy_num))%>%
   ggplot +
@@ -1229,12 +1233,15 @@ ggplot() +
         axis.ticks.y=element_blank(),
         legend.position = "none")
 
+#point size will look larger in R than when it is exported
 #ggsave("./figures/commsmap11.png", width = 8, height = 10.5, units = "in")
 
 
 
 #ALL outplanted individuals
-fix_deg_min_sec <- seedlings_clean_joined%>%#Fixing lat/long points that are in deg_min_sec
+
+fix_deg_min_sec <- seedlings_clean_joined%>%
+  #Fixing lat/long points that are in deg_min_sec
   filter(!is.na(N)&!is.na(W))%>%
   filter(grepl("\"", N) & grepl("\"", W)) %>%
   mutate(N = str_replace(N, "\'", " "))%>%
@@ -1248,7 +1255,8 @@ fix_deg_min_sec <- seedlings_clean_joined%>%#Fixing lat/long points that are in 
   mutate(lat = measurements::conv_unit(N, from = 'deg_min_sec', to = 'dec_deg')) %>%
   mutate(long = measurements::conv_unit(W, from = 'deg_min_sec', to = 'dec_deg'))
 
-fix_deg_dec_min <- seedlings_clean_joined%>%#Fixing lat/long points that are in deg_dec_min
+fix_deg_dec_min <- seedlings_clean_joined%>%
+  #Fixing lat/long points that are in deg_dec_min
   filter(!is.na(N)&!is.na(W))%>%
   filter(!grepl("\"", N) & !grepl("\"", W))%>%
   filter(grepl("\\.", N) & grepl("\\.", W))%>%
@@ -1263,7 +1271,8 @@ fix_deg_dec_min <- seedlings_clean_joined%>%#Fixing lat/long points that are in 
   mutate(lat = measurements::conv_unit(N, from = 'deg_dec_min', to = 'dec_deg')) %>%
   mutate(long = measurements::conv_unit(W, from = 'deg_dec_min', to = 'dec_deg'))
 
-fix_deg_other <- seedlings_clean_joined%>% #Fixing lat/long points that are in another format (space where the decimal in minutes should be)
+fix_deg_other <- seedlings_clean_joined%>% 
+  #Fixing lat/long points that are in another format (space where the decimal in minutes should be)
   filter(!is.na(N)&!is.na(W))%>%
   filter(!MetalTagID %in% fix_deg_dec_min$MetalTagID)%>%
   filter(!MetalTagID %in% fix_deg_min_sec$MetalTagID)%>%
@@ -1315,7 +1324,8 @@ ggplot() +
         axis.ticks.y=element_blank(),
         legend.position = "none")
 
-ggsave("./figures/commsmap_all6.png", width = 8.5, height = 12, units = "in")
+#point size will look larger in R than when it is exported
+#ggsave("./figures/commsmap_all6.png", width = 8.5, height = 12, units = "in")
 
 
 #comparing locations of ALIVE & DEAD seedlings
@@ -1457,25 +1467,6 @@ M1_age %>%
   geom_text(label="1200 days", x=(1200/as.numeric(max(seedlings_clean_M1$TimeAlive_conservative))), y=0.8) +
   theme_classic()
 
-####TROUBLESHOOTING####
-#find the MetalTagIDs that were recorded twice
-seedlings_clean_joined%>%
-  group_by(MetalTagID)%>%
-  summarize(n=n())%>%
-  filter(n>1)
-seedlings_clean%>%
-  group_by(MetalTagID)%>%
-  summarize(n=n())%>%
-  filter(n>1)
-#shows all of the information on the two metal tags that have duplicates
-temp <- seedlings_clean_joined%>%
-  filter(MetalTagID %in% c('68', '318'))
-
-
-#identifies MetalTagIDs from seedlings_clean_joined that are not in seedlings_clean
-#seedlings_clean_joined%>%
-#  filter(!MetalTagID %in% seedlings_clean$MetalTagID)
-
 ####WATERED/UNWATERED####
 seedlings_clean_watered <- seedlings_clean%>%
   filter(Watered == "Si")
@@ -1538,6 +1529,30 @@ df_age_for_plotting %>%
   ggplot(aes(x = Days, y = PercentAlive, color = data_type)) +
   geom_step() +
   theme_classic()
+
+
+####TROUBLESHOOTING####
+#find the MetalTagIDs that were recorded twice
+seedlings_clean_joined%>%
+  group_by(MetalTagID)%>%
+  summarize(n=n())%>%
+  filter(n>1)
+seedlings_clean%>%
+  group_by(MetalTagID)%>%
+  summarize(n=n())%>%
+  filter(n>1)
+#shows all of the information on the two metal tags that have duplicates
+temp <- seedlings_clean_joined%>%
+  filter(MetalTagID %in% c('68', '318'))
+
+
+#identifies MetalTagIDs from seedlings_clean_joined that are not in seedlings_clean
+#seedlings_clean_joined%>%
+#  filter(!MetalTagID %in% seedlings_clean$MetalTagID)
+
+#export .csv to make Google Map of sites
+#write.csv(priority_sites, "priority_sites.csv")
+
 
 
 ####EXAMPLE: MAKING A FUNCTION####
