@@ -198,7 +198,8 @@ eco_monitoring_25_long <- eco_monitoring_25%>%
 #combines 2024 and 2025 data for individuals that were observed in both years
 eco_monitoring_long <- merge(eco_monitoring_24_long, eco_monitoring_25_long, all = TRUE)%>%
   group_by(`Metal tag ID`)%>%
-  filter(n() == 2)
+  filter(n() == 2)%>%
+  filter(!`Metal tag ID` == '484') #I removed this individual temporarily. It was recorded twice in the field data and we are trying to determine whether one of those should have been a different ID. Otherwise, we will have to exclude both observations.
 
 #WIDE: combining 2024 and 2025 data so that each Metal tag ID has one row and Height/Canopy/Condition have separate rows for 2024 and 2025
 
@@ -218,22 +219,25 @@ eco_monitoring_25_wide <- eco_monitoring_25%>%
   filter(!is.na(Condition_num))%>%
   select('Metal tag ID', 'Height_cm_25', 'Condition_num_25', 'Canopy_num_25', 'Notes_25')
 
+#combines 2024 and 2025 data with one row per individual
 eco_monitoring_wide <- left_join(eco_monitoring_24_wide, eco_monitoring_25_wide, by='Metal tag ID')%>%
-    mutate(Condition_num_24=as.numeric(levels(Condition_num_24))[Condition_num_24])%>%
+#determines whether an individual increase in condition, decreased, or stayed the same between 2024 and 2025
+  mutate(Condition_num_24=as.numeric(levels(Condition_num_24))[Condition_num_24])%>%
   mutate(Condition_num_25=as.numeric(levels(Condition_num_25))[Condition_num_25])%>%
   mutate(slope=case_when(Condition_num_25 > Condition_num_24 ~ '1',
                          Condition_num_25 < Condition_num_24 ~ '-1',
                          Condition_num_25 == Condition_num_24 ~ '0'))
 
 
+#creates an alternative df where each individual has a row for 2024 observations and a row for 2025 observations
 eco_monitoring_long_x <- eco_monitoring_wide%>%
-  pivot_longer(cols = !`Metal tag ID`,
-               names_to = ("Height_cm", "Canopy_num", "Condition_num"),
-               names_sep = 
-               values_to = "Condition_num_25")
-  
-
+  pivot_longer(cols = !c(`Metal tag ID`, slope),
+               names_to = c(".value", "Year"),
+               names_pattern = "(.*)_(.*)")%>%
+  mutate(Year=recode(Year, "24" = "2024",
+                     "25" = "2025"))
 ?pivot_longer
+
 
 
 #FIGURE: Height tanglegram
