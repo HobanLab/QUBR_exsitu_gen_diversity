@@ -1,0 +1,27 @@
+Primer Name,Primer Color,MP,Conc,Di/Tri,Repeat length (in real scores)
+QUVA 02_127,VIC,1,0.12,Tri,3
+QUVA 02_774,PET,1,0.11,Di,2
+QUVA 02_876,NED,1,0.22,Di,2
+QUVA 03_250,VIC,1,0.14,Di,2
+QUVA 03_284,NED,1,0.45,Di,2
+QUVA 07_187,6FAM,1,0.08,Di,2
+QUVA 01_168,VIC,2,0.16,Di,2
+QUVA 02_852,6FAM,2,0.13,Di (but scored as mono),1
+QUVA 03_230,PET,2,0.15,Tri,3
+QUVA 08_459,VIC,2,0.08,Di (but scored as mono),1
+QUVA 08_529,NED,2,0.15,Tri,3
+QUVA 02_813,NED,3,0.6,Di,2
+QUVA 02_989,VIC,3,0.07,Di (but scored as mono),1
+QUVA 12_333,PET,3,0.25,Tri (but scored as mono),1
+QUVA 02_754,PET,4,0.25,Tri,3
+QUVA 02_829,6FAM,4,0.28,Di,1
+QUVA 03_101,6FAM,4,0.1,Tri,3
+QUVA 05_282,VIC,4,0.07,Di,1
+QUVA 05_468,PET,4,0.09,Di,2
+QUVA 08_528,NED,PRESENT BUT UNSCORED (in MP4),0.05,Di,2
+QUVA 03_482,PET,5,0.2,Di (but scored as a mono),1
+QUVA 03_663,VIC,5,0.06,Tri,1
+QUVA 06_193,6FAM,5,0.06,Di,2
+QUVA 02_862,6FAM,DITCHED,0,Tri (but scored as mono),
+QUVA 12_324,6FAM,DITCHED,0,Tri (but scored as mono),
+QUVA 11_495,NED,NEEDS TO BE RUN ALONE,0.06,Tri,
