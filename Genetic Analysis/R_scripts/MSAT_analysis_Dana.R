@@ -12,25 +12,31 @@ library(PopGenReport)
 
 
 #set to wherever you want your outputs from these analyses to go
-setwd("~/Desktop/analyzing_MSAT_results")
+setwd("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis")
 
 # Create a function that is the opposite of %in%
 `%notin%` <- Negate(`%in%`)
 
 ####Loading in the raw scores from geneious####
 
-# edit below to the path where all the csvs (output from geneious) for aggregating are
-path_to_geneious_outputs = "~/Desktop/analyzing_MSAT_results/inputs"
-# edit below regex pattern if you have a different naming scheme for sample names
+path_to_code_outputs = "~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs"
+
+# the location on my computer where outputs are aggregated 
+path_to_geneious_outputs = "~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/Genetic_inputs"
+
+# defines naming scheme for sample names 
 name_pattern_regex <- "SH-Q\\d{4}" #currently: match SH-Q followed by 4 digits
-# makes a list of file names for applying functions over
 
 # dealing with the weirdos
-path_to_weird_outputs = paste0(path_to_geneious_outputs, "/RaMP_inputs/Weird_RaMP_inputs")
-weird_file_list <- list.files(path=path_to_weird_outputs, full.names= T, pattern = "*.csv") 
-
+path_to_weird_outputs = "~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/Genetic_inputs/RaMP_inputs/Weird_RaMP_inputs"
+weird_file_list <- list.files(path=path_to_weird_outputs, full.names= T, pattern = "*.csv")
 
 DP_list_RaMP <- c("DP04", "DP06", "DP07")
+MP_list_RaMP <- c("MP1", "MP4")
+
+# makes a list of file names for applying functions over
+file_list <- list.files(path=paste0(path_to_geneious_outputs), full.names= T, pattern = "*.csv", recursive = TRUE) 
+file_list <- file_list[which(file_list%notin%weird_file_list)] #excluding weird files
 
 lapply(DP_list_RaMP, function(DP){
   DP_file_list <- weird_file_list[which(str_detect(weird_file_list, DP))]
@@ -43,15 +49,13 @@ lapply(DP_list_RaMP, function(DP){
     select(Name | matches("03_284") | ends_with("y")) %>%
     select(!(contains("03_284") & ends_with("y"))) %>%
     rename_with(~str_remove(., '.x|.y'), .cols = !Name) 
-  write_csv(DP_data, paste0(path_to_geneious_outputs, "/RaMP_inputs/RaMP_", DP, "_MP1.csv", sep = ""))
+  write_csv(DP_data, paste0(path_to_geneious_outputs, "/RaMP_", DP, "_MP1.csv", sep = ""))
 })
 
-file_list <- list.files(path=paste0(path_to_geneious_outputs), full.names= T, pattern = "*.csv", recursive = TRUE) 
-file_list <- file_list[which(file_list%notin%weird_file_list)] #excluding weird files
 
-MP_list_RaMP <- c("MP1", "MP4")
-
-# reads in csv data, edit it so that the name column is correct and consistent across input csvs and then join all csvs together with left_join 
+# reads in csv data
+#edits data so that name column is correct and consistent across input csvs and then
+#join all csvs together with left_join 
 all_data <- reduce(lapply(MP_list_RaMP, function(MP){
   MP_file_list <- file_list[which(str_detect(file_list, MP))]
   MP_data <- bind_rows(lapply(MP_file_list, function(file){
@@ -85,7 +89,7 @@ MP_data_cleaned <- MP_data %>%
 
 #THIS IS NOT RELEVANT UNTIL TRIPLOIDS ARE SCORED
 #Code below removes the 3rd allele possibility from locus 08_529 so that locus matches the rest of the data (from all other loci)
-all_data <- all_data %>%
+#all_data <- all_data %>%
   # mutate(`QUVA 08_529 - 3` =
   #          case_when(`QUVA 08_529 - 3` != `QUVA 08_529 - 2` & !is.na(`QUVA 08_529 - 3`) ~ "Too many alleles",
   #                    .default = NA)) %>% #overwrite existing scores in the 3rd 08_529 col with "too many alleles" if the 3rd allele was different than the 2nd AND wasn't an NA
@@ -93,7 +97,7 @@ all_data <- all_data %>%
   #               ~ case_when(`QUVA 08_529 - 3` == "Too many alleles" ~ "Too many alleles",
   #                           .default = .))) %>% #overwrite existing scores in all 08_529 cols with "too many alleles" if the 3rd allele was previously overwritten with "too many alleles"
   #select(-`QUVA 08_529 - 3`) %>% # drop the now unnecessary 3rd 08_529 column
-  select(-c(`QUVA 08_528 - 1`, `QUVA 08_528 - 2`))
+  #select(-c(`QUVA 08_528 - 1`, `QUVA 08_528 - 2`))
 
 
 ####Exploring polyploidy####  
@@ -124,11 +128,12 @@ ggplot() +
 
 #Add a column to the data that has a count of the number of polyploid loci per ind
 all_data_cleaned <- all_data %>% 
+  select(-c(`QUVA 08_528 - 1`, `QUVA 08_528 - 2`))%>% # this locus was unscorable (08_528 - 1 & 08_528), so we are removing it
   rowwise() %>% #make it so the following functions are performed on rows rather than cols
   mutate(num_loci_polyploid = sum(str_detect(c_across(-c(Name, DP_num)), "Too many alleles"))/2) #get a count of the number of cells across all cols w/ too many alleles per row (ind) (except  the Name and DP_num cols)
 
 # Get the number of loci in the data
-num_loci <- (ncol(all_data) - 2) / 2
+num_loci <- ((ncol(all_data_cleaned) - 3) / 2) # We subtracted the num_loci_polyploid column, the name column, and the DP_num column
 
 # Make a historgram of the number of polyploid loci present in individuals with at least 1 polyploid locus
 all_data_cleaned %>%
@@ -142,7 +147,7 @@ all_data_cleaned %>%
 ####Cleaning data for futher analyses####
 
 # Write the (mostly) cleaned data to the working directory 
-write_csv(all_data_cleaned, "./all_genos_aggregated.csv")
+write_csv(all_data_cleaned, paste0(path_to_code_outputs, "/all_genos_aggregated.csv"))
 
 
 ## Final cleaning steps for further analyses include:
@@ -159,21 +164,22 @@ data_tmp <- all_data_cleaned %>%
   #remove the extraneous info in loci names
   rename_with(~str_remove(., 'QUVA ')) %>%
   rename_with(~str_remove(., '\\(ALEXA\\)')) %>%
-  
-  #make a new col w/ TRUE if any of the values in the loci cols have the value "No peak"  
+  #make a new col w/ TRUE if any of the values in the loci cols have the value "No peak" or "Unbinned"
   mutate(need_reamp = if_any(
     .cols = -c(Name, DP_num, num_loci_polyploid), 
-    .fns = ~ str_detect(., "No peak")))
-
+    .fns = ~ str_detect(., "No peak")))%>%
+  mutate(need_recheck = if_any(
+    .cols = -c(Name, DP_num, num_loci_polyploid), 
+    .fns = ~ str_detect(., "nbinned")))
+#MAKE CSV FOR ASH
 
 # Make a df w/ only the info about inds which are putative polyploids
 putative_polyploids <- data_tmp %>%
   filter(num_loci_polyploid >= 1) %>%
-  select(Name, Tissue_ID, DP_num, num_loci_polyploid)%>%
-  left_join()
+  select(Name, DP_num, num_loci_polyploid)
 
 # Write the polyploid data to the working directory
-write_csv(putative_polyploids, "./putative_polyploid_list.csv")
+#write_csv(putative_polyploids, paste0(path_to_code_outputs, "/putative_polyploid_list.csv"))
 
 
 #NOT IMPORTANT BUT STILL RUN IT
@@ -187,14 +193,25 @@ need_reamp_list <- data_tmp %>%
   ungroup() %>% #stop performing operations rowwise
   select(Name, reamp_loci) #keep only the individual name and which loci need to be reamped 
 # Write the reamp list data to working dir 
-#write_csv(need_reamp_list, "./reamplification_list.csv")
+#write_csv(need_reamp_list, paste0(path_to_code_outputs, "/reamplification_list.csv"))
+
+need_recheck_list <- data_tmp %>%
+  filter(need_recheck ==T) %>% #keep only the inds which need reamp
+  select(c(ends_with(" - 1"), Name)) %>% #keep only the info from first of the 2 alleles per locus 
+  rename_with(~str_remove(., ' - 1')) %>% #clean up locus names
+  rowwise() %>% #make it so the following functions are performed on rows rather than columns (used w/ c_across to look across all columns in a row for data aggregation)
+  mutate(recheck_loci = paste(names(.)[str_detect(c_across(-c(Name)), "nbinned")], collapse = ", ")) %>% #make a new col with the names of all the cols (loci) that have "No peak" values (aka need to be reamplified) 
+  ungroup() %>% #stop performing operations rowwise
+  select(Name, recheck_loci) #keep only the individual name and which loci need to be reamped 
+# Write the recheck list data to working dir 
+#write_csv(need_recheck_list, paste0(path_to_code_outputs, "/recheck_list.csv"))
+#MAKE CSV FOR ASH
 
 
 # Make a df for further analyses w/ the polyploids and inds that need to be reamped removed
 final_clean_data <- data_tmp %>%
-  filter(Name %notin% c(putative_polyploids$Name, need_reamp_list$Name)) %>%
+  filter(Name %notin% c(putative_polyploids$Name, need_reamp_list$Name, need_recheck_list$Name)) %>%
   select(-c(need_reamp, num_loci_polyploid)) %>% #get rid of the now extraneous cols 
-  select(-c("08_528 - 1", "08_528 - 2"))%>%
   #add filter out string detect
   mutate(across(-c(Name, DP_num), as.numeric)) #make the genetic data numeric since there should be no more cells w/ text rather than scores
 
@@ -221,6 +238,18 @@ origs <- data_tmp %>%
   arrange(Name) %>% #arrange so the SHQ IDs are in order so that my dups can be easily compared between each other 
   mutate(real_ID = Name) #make a matching real ID column so that the dups and origs df are identical
 
+#why are the dfs uequal rows?
+dups1 <- dups%>%
+  select("Name")
+
+origs1 <- origs%>%
+  select("Name")
+
+combo1 <- (bind_cols(origs1$Name, dups1$Name))
+#issue is in SH-Q4447?
+
+
+
 
 # Make a df w/ FALSE in any cell that isn't identical between the duplicate runs of a given individual 
 dup_mismatches <- as.tibble(dups == origs) %>%
@@ -230,7 +259,7 @@ dup_mismatches <- as.tibble(dups == origs) %>%
 dups_origs_combo <- rbind(dups, origs) # a table to make searching up differences in individuals easier
 
 # Write the df w/ mismatch info to the dir w/ the raw geneious data so any mismatches can be evaluated 
-write_csv(dup_mismatches, "./dup_mismatches.csv")
+write_csv(dup_mismatches, paste0(path_to_code_outputs, "/dup_mismatches.csv"))
 
 has_nas <- dup_mismatches%>% #11 of these individuals have NAs in MP4 and are getting filtered out
   filter(if_any(-c(`origs$real_ID`, num_loci_polyploid, need_reamp), ~ is.na(.)))%>%
@@ -276,14 +305,14 @@ false_dup_mismatches <-
 ## First, I need to load my other data that will enable me to link the SHQ IDs in the genetic data to all other info about that individual
 
 # Load in the SHQ database
-TCB_QUBR_IDs <- read_csv("~/Desktop/analyzing_MSAT_results/QUBR_database - Sheet1.csv") %>%
+TCB_QUBR_IDs <- read_csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/QUBR_database - Sheet1.csv") %>%
   filter(str_detect(`Species - specific epithet`, "randegeei")) %>% #keep only the QUBR data
   select(c(`Extraction Tube #`, `Tissue_ID`, `TCB_ID`, `Tissue Weight`, `Nanodrop conc (ng/uL)`, `Notes`)) #keep only the info that I actually care about (mostly SHQ ID and TCB ID but also other cols that could explain issues w/ amp)
 
 
 # Load in the processed data with tree coords + DBHs
 
-RaMP_adults <- read.csv("~/Desktop/analyzing_MSAT_results/QUBR Field Datasheets Nov 2024 - filled - Adults.csv")%>%
+RaMP_adults <- read.csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/QUBR Field Datasheets Nov 2024 - filled - Adults.csv")%>%
   rename(QUBR_ID = QUBR.ID)%>%
   mutate(QUBR_ID = paste0("QUBR_", QUBR_ID)) %>% #adding QUBR to the QUBR IDs so they match the IDs in the TCB database
   left_join(., TCB_QUBR_IDs, by = join_by(QUBR_ID == Tissue_ID)) %>% #merge w/ SHQ database by the QUBR IDs
@@ -291,7 +320,7 @@ RaMP_adults <- read.csv("~/Desktop/analyzing_MSAT_results/QUBR Field Datasheets 
   filter(Locality %notin% c('LS', 'LT', 'SB'))
 exploring_RaMP <- RaMP_adults%>%filter(SHQ_ID%notin%final_clean_dedup_data$Name)
 
-seedlings_2022 <- read.csv("~/Desktop/analyzing_MSAT_results/04_2024_field_datasheets_full.xlsx - 2022 seedlings.csv")%>%
+seedlings_2022 <- read.csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/04_2024_field_datasheets_full.xlsx - 2022 seedlings.csv")%>%
   rename(QUBR_ID = QUBR.ID)%>%
   left_join(., TCB_QUBR_IDs, by = join_by(QUBR_ID == Tissue_ID)) %>% #merge w/ SHQ database by the QUBR IDs
   rename(SHQ_ID = `Extraction Tube #`)
@@ -308,14 +337,14 @@ polyploid_exploration_overlap <- intersect(exploring_2022$SHQ_ID, putative_polyp
 print(polyploid_exploration_overlap) #42 inds overlap (123 total putative polyploids)
 #no overlap between individuals in (exploring_2022 & reamp) and (exploring_2022 & polyploid)
 
-outplanted <- read.csv("~/Desktop/analyzing_MSAT_results/QUBR Field Datasheets Nov 2024 - filled - OP Seedlings.csv", na.strings = "N/A")%>%
+outplanted <- read.csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/QUBR Field Datasheets Nov 2024 - filled - OP Seedlings.csv", na.strings = "N/A")%>%
   rename(QUBR_ID = QUBR.ID)%>%
   filter(!is.na(QUBR_ID))%>%
   mutate(QUBR_ID = paste0("QUBR_", QUBR_ID)) %>% #adding QUBR to the QUBR IDs so they match the IDs in the TCB database
   left_join(., TCB_QUBR_IDs, by = join_by(QUBR_ID == Tissue_ID)) %>% #merge w/ SHQ database by the QUBR IDs
   rename(SHQ_ID = `Extraction Tube #`)
 
-Ash_adults <- read_csv("~/Desktop/analyzing_MSAT_results/all_data_merged.csv") %>%
+Ash_adults <- read_csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/all_data_merged.csv") %>%
   mutate(QUBR_ID = paste0("QUBR_", QUBR_ID)) %>% #adding QUBR to the QUBR IDs so they match the IDs in the TCB database
   left_join(., TCB_QUBR_IDs, by = join_by(QUBR_ID == Tissue_ID)) %>% #merge w/ SHQ database by the QUBR IDs
   rename(SHQ_ID = `Extraction Tube #`)
@@ -496,7 +525,7 @@ range(genind_data_2022@loc.n.all) #get the range of number of alleles per locus
 loci_order <- names(genind_data_adults@loc.n.all)
 
 # Reading the csv w/ the actual repeat length info in from my working directory 
-replen_info <- read_csv("./primer_replen_info.csv") %>%
+replen_info <- read_csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/primer_replen_info.csv") %>%
   mutate(`Primer Name` = str_remove(`Primer Name`, 'QUVA ')) %>%
   filter(MP %in% c(1,4)) %>%
   mutate(`Primer Name` = factor(`Primer Name`, levels = loci_order)) %>%
