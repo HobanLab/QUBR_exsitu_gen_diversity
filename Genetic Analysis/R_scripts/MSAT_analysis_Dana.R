@@ -27,30 +27,32 @@ path_to_geneious_outputs = "~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic
 # defines naming scheme for sample names 
 name_pattern_regex <- "SH-Q\\d{4}" #currently: match SH-Q followed by 4 digits
 
-# dealing with the weirdos
+#dealing with the 3 plates that have 2 files for MP1
 path_to_weird_outputs = "~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/Genetic_inputs/RaMP_inputs/Weird_RaMP_inputs"
 weird_file_list <- list.files(path=path_to_weird_outputs, full.names= T, pattern = "*.csv")
 
-DP_list_RaMP <- c("DP04", "DP06", "DP07")
-MP_list_RaMP <- c("MP1", "MP4")
+DP_list_RaMP <- c("DP04", "DP06", "DP07") #these are the DPs with multiple files per plate in MP1
+MP_list_RaMP <- c("MP1", "MP4") #these are the only multiplexes my RaMP work used and therefore the only one I care about in other data
 
-# makes a list of file names for applying functions over
-file_list <- list.files(path=paste0(path_to_geneious_outputs), full.names= T, pattern = "*.csv", recursive = TRUE) 
-file_list <- file_list[which(file_list%notin%weird_file_list)] #excluding weird files
 
+#creates csv files
 lapply(DP_list_RaMP, function(DP){
   DP_file_list <- weird_file_list[which(str_detect(weird_file_list, DP))]
   DP_data <- lapply(DP_file_list, function(DP_file){
     read_csv(DP_file, na = "") %>%
-      filter(str_detect(Name, "BLANK", negate = T)) %>% # filters out the blanks
+      filter(str_detect(Name, "BLANK", negate = T)) %>% #filters out the blanks
       mutate(Name = paste0(str_extract(Name, name_pattern_regex),"_", str_extract(Name,  "DP\\d{2}")))
   }) %>%
     reduce(left_join, by = "Name") %>%
-    select(Name | matches("03_284") | ends_with("y")) %>%
+    select(Name | matches("03_284") | ends_with("y")) %>% #we removed this primer because it was always unscorable
     select(!(contains("03_284") & ends_with("y"))) %>%
     rename_with(~str_remove(., '.x|.y'), .cols = !Name) 
-  write_csv(DP_data, paste0(path_to_geneious_outputs, "/RaMP_", DP, "_MP1.csv", sep = ""))
+  write_csv(DP_data, paste0(path_to_geneious_outputs, "/RaMP_inputs/RaMP_MP1_", DP, ".csv", sep = ""))
 })
+
+# makes a list of file names for applying functions over
+file_list <- list.files(path=paste0(path_to_geneious_outputs), full.names= T, pattern = "*.csv", recursive = TRUE) 
+file_list <- file_list[which(file_list%notin%weird_file_list)] #excluding weird files which have 2 files for the same DP and MP
 
 
 # reads in csv data
@@ -63,9 +65,10 @@ all_data <- reduce(lapply(MP_list_RaMP, function(MP){
       mutate(across(everything(), as.character))# makes everything a character rather than a numeric
   }))
   
-MP_data_cleaned <- MP_data %>%
+  MP_data_cleaned <- MP_data %>%
     filter(str_detect(Name, "BLANK", negate = T)) %>% # filters out the blanks
     mutate(DP_num = str_extract(Name, "DP\\d{2}")) %>% # makes a column that lists the DP associated with the sample --> this will enable me to search up the origin of dups with  mismatches
+    arrange(DP_num)%>% #ensures that dups are always read after origs  
     mutate(Name = str_extract(Name, name_pattern_regex)) %>% # gets rid of cell/plate junk at the end of the name columns in each df so the Name column now contains names that will be consistent across input csvs
     
     # start of code to rename duplicate occurrences of sample names
@@ -149,14 +152,12 @@ all_data_cleaned %>%
 # Write the (mostly) cleaned data to the working directory 
 write_csv(all_data_cleaned, paste0(path_to_code_outputs, "/all_genos_aggregated.csv"))
 
-
 ## Final cleaning steps for further analyses include:
 #Renaming the loci to have cleaner names
 #Removing individuals w/ loci w/ no peaks
 #Removing individuals w/ loci w 3 alleles
 #Turning all loci data into numerics
 #WILL ALSO NEED TO REMOVE UNBINNED DATA (str detect "Unbinned peaks in locus")
-
 
 # Make a temporary dataframe for further cleaning
 data_tmp <- all_data_cleaned %>%
@@ -171,16 +172,20 @@ data_tmp <- all_data_cleaned %>%
   mutate(need_recheck = if_any(
     .cols = -c(Name, DP_num, num_loci_polyploid), 
     .fns = ~ str_detect(., "nbinned")))
-#MAKE CSV FOR ASH
+#WRITE CSV FOR ASH
 
 # Make a df w/ only the info about inds which are putative polyploids
 putative_polyploids <- data_tmp %>%
-  filter(num_loci_polyploid >= 1) %>%
+  filter(num_loci_polyploid > 1) %>%
   select(Name, DP_num, num_loci_polyploid)
 
-# Write the polyploid data to the working directory
+#Write the polyploid data to the working directory
 #write_csv(putative_polyploids, paste0(path_to_code_outputs, "/putative_polyploid_list.csv"))
 
+#make a df about inds which are iffy polyploids
+iffy_putative_polyploids <- data_tmp %>%
+  filter(num_loci_polyploid == 1) %>%
+  select(Name, DP_num, num_loci_polyploid)
 
 #NOT IMPORTANT BUT STILL RUN IT
 # Make a df of the inds that need to be re-amplified and a list of which of their loci need reamp
@@ -192,7 +197,8 @@ need_reamp_list <- data_tmp %>%
   mutate(reamp_loci = paste(names(.)[str_detect(c_across(-c(Name)), "No peak")], collapse = ", ")) %>% #make a new col with the names of all the cols (loci) that have "No peak" values (aka need to be reamplified) 
   ungroup() %>% #stop performing operations rowwise
   select(Name, reamp_loci) #keep only the individual name and which loci need to be reamped 
-# Write the reamp list data to working dir 
+
+#Write the reamp list data to working dir 
 #write_csv(need_reamp_list, paste0(path_to_code_outputs, "/reamplification_list.csv"))
 
 need_recheck_list <- data_tmp %>%
@@ -202,7 +208,7 @@ need_recheck_list <- data_tmp %>%
   rowwise() %>% #make it so the following functions are performed on rows rather than columns (used w/ c_across to look across all columns in a row for data aggregation)
   mutate(recheck_loci = paste(names(.)[str_detect(c_across(-c(Name)), "nbinned")], collapse = ", ")) %>% #make a new col with the names of all the cols (loci) that have "No peak" values (aka need to be reamplified) 
   ungroup() %>% #stop performing operations rowwise
-  select(Name, recheck_loci) #keep only the individual name and which loci need to be reamped 
+  select(Name, recheck_loci) #keep only the individual name and which loci need to be rechecked 
 # Write the recheck list data to working dir 
 #write_csv(need_recheck_list, paste0(path_to_code_outputs, "/recheck_list.csv"))
 #MAKE CSV FOR ASH
@@ -210,14 +216,15 @@ need_recheck_list <- data_tmp %>%
 
 # Make a df for further analyses w/ the polyploids and inds that need to be reamped removed
 final_clean_data <- data_tmp %>%
-  filter(Name %notin% c(putative_polyploids$Name, need_reamp_list$Name, need_recheck_list$Name)) %>%
+  filter(Name %notin% c(putative_polyploids$Name, need_reamp_list$Name, need_recheck_list$Name, iffy_putative_polyploids$Name)) %>%
   select(-c(need_reamp, num_loci_polyploid)) %>% #get rid of the now extraneous cols 
   #add filter out string detect
   mutate(across(-c(Name, DP_num), as.numeric)) #make the genetic data numeric since there should be no more cells w/ text rather than scores
 
 # Check to see the underlying cause of any NAs in any of the columns in the clean data
-data_tmp %>%
+check_NA <- data_tmp %>%
   filter(Name %in% filter(final_clean_data, if_any(everything(), is.na))$Name)
+#all of the inds that get flagged are places where the dup (_B) is in an earlier DP than the original
 
 
 ####Dealing w/ duplicate data####  
@@ -238,19 +245,6 @@ origs <- data_tmp %>%
   arrange(Name) %>% #arrange so the SHQ IDs are in order so that my dups can be easily compared between each other 
   mutate(real_ID = Name) #make a matching real ID column so that the dups and origs df are identical
 
-#why are the dfs uequal rows?
-dups1 <- dups%>%
-  select("Name")
-
-origs1 <- origs%>%
-  select("Name")
-
-combo1 <- (bind_cols(origs1$Name, dups1$Name))
-#issue is in SH-Q4447?
-
-
-
-
 # Make a df w/ FALSE in any cell that isn't identical between the duplicate runs of a given individual 
 dup_mismatches <- as.tibble(dups == origs) %>%
   select(-c(Name, real_ID, DP_num)) %>% #get rid of cols which are uninformative about genetic data
@@ -261,7 +255,9 @@ dups_origs_combo <- rbind(dups, origs) # a table to make searching up difference
 # Write the df w/ mismatch info to the dir w/ the raw geneious data so any mismatches can be evaluated 
 write_csv(dup_mismatches, paste0(path_to_code_outputs, "/dup_mismatches.csv"))
 
-has_nas <- dup_mismatches%>% #11 of these individuals have NAs in MP4 and are getting filtered out
+
+#if everything is correct these should all be 0
+has_nas <- dup_mismatches%>% 
   filter(if_any(-c(`origs$real_ID`, num_loci_polyploid, need_reamp), ~ is.na(.)))%>%
   select(`origs$real_ID`)
 
@@ -271,7 +267,6 @@ full_na_list <- dups_origs_combo%>%
 has_nas_fulldata <- data_tmp%>%
   filter(if_any(-c(Name, DP_num, num_loci_polyploid, need_reamp), ~ is.na(.)))%>%
   select(Name) #checking if there are any other NAs (ans: there aren't)
-
 
 ## Removing all duplicate inds from my data then re-adding them so they only occur 1 time
 
@@ -285,19 +280,20 @@ dups_to_keep <- dups_origs_combo %>%
   select(-c(Name)) %>% #get rid of the Name column
   rename(Name = real_ID)%>% #make the SHQ ID the name for these inds (so nothing should have a _B modifier even if it was originally the 2nd copy of an SHQ) --> I will still be able to tell which of the 2 possible inds these are by maintaining DP_num (should I need to look into the sequences for any reason)
   select(-c(num_loci_polyploid, need_reamp))
+
 # Make a df w/ only the single selected ind for all dups (de-duplicated data)
 final_clean_dedup_data <- final_clean_data %>%
   filter(Name %notin% dups_origs_combo$Name) %>% #remove all dups (the org and the dup)
   rbind(., dups_to_keep) #add back in only the ind in the dups_to_keep data
 
 #how many mismatches occurred in the dup_mismatches?
+#did we score the orig and the dup differently?
 false_dup_mismatches <-
   dup_mismatches%>%
   select(1:(last_col() - 2))%>% #removes polyploid & reamp columns
   filter_at(vars(2:23), any_vars(.=='FALSE'))#checks all columns except for SH-Q ID for 'FALSE'
-#ans: 11 individuals (SH-Q3303, SH-Q3447, SH-Q3490, SH-Q3548, SH-Q4039, SH-Q4072, SH-Q4091, SH-Q4164, SH-Q4490, SH-Q4515, SH-Q4983) 
+#ans: 12 individuals (SH-Q3303, SH-Q3447, SH-Q3490, SH-Q3548, SH-Q4039, SH-Q4072, SH-Q4075, SH-Q4091, SH-Q4164, SH-Q4490, SH-Q4515, SH-Q4983) 
 #ans: across 4 loci(07_187 - 1,	07_187 - 2, 02_829 - 1,	02_829 - 2,	03_101 - 1,	03_101 - 2, 02_754 - 1,	02_754 - 2)
-
 
 
 ####Preping a df that connects all info I have about every ind together####
@@ -311,31 +307,36 @@ TCB_QUBR_IDs <- read_csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic A
 
 
 # Load in the processed data with tree coords + DBHs
-
 RaMP_adults <- read.csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/QUBR Field Datasheets Nov 2024 - filled - Adults.csv")%>%
   rename(QUBR_ID = QUBR.ID)%>%
   mutate(QUBR_ID = paste0("QUBR_", QUBR_ID)) %>% #adding QUBR to the QUBR IDs so they match the IDs in the TCB database
   left_join(., TCB_QUBR_IDs, by = join_by(QUBR_ID == Tissue_ID)) %>% #merge w/ SHQ database by the QUBR IDs
   rename(SHQ_ID = `Extraction Tube #`)%>%
   filter(Locality %notin% c('LS', 'LT', 'SB'))
-exploring_RaMP <- RaMP_adults%>%filter(SHQ_ID%notin%final_clean_dedup_data$Name)
+exploring_RaMP <- RaMP_adults%>%filter(SHQ_ID%notin%final_clean_dedup_data$Name) #looks at individuals which are missing from our data (they were used for testing)
 
 seedlings_2022 <- read.csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/04_2024_field_datasheets_full.xlsx - 2022 seedlings.csv")%>%
   rename(QUBR_ID = QUBR.ID)%>%
   left_join(., TCB_QUBR_IDs, by = join_by(QUBR_ID == Tissue_ID)) %>% #merge w/ SHQ database by the QUBR IDs
   rename(SHQ_ID = `Extraction Tube #`)
-
-exploring_2022 <- seedlings_2022%>%
+exploring_2022 <- seedlings_2022%>% #these maybe were filtered out previously, even though they have SHQ_IDs? unsure based on what
   filter(SHQ_ID%notin%final_clean_dedup_data$Name)%>%
-  filter(!is.na(SHQ_ID)) 
+  filter(!is.na(SHQ_ID))
+#why did some adults not get extracted?
 
 #are these SHQ_IDs in the polyploid or need reamp list?
 reamp_exploration_overlap <- intersect(exploring_2022$SHQ_ID, need_reamp_list$Name)
 print(reamp_exploration_overlap) #4 inds overlap (17 total need reamp)
-
 polyploid_exploration_overlap <- intersect(exploring_2022$SHQ_ID, putative_polyploids$Name)
-print(polyploid_exploration_overlap) #42 inds overlap (123 total putative polyploids)
+print(polyploid_exploration_overlap) #10 inds overlap (60 total putative polyploids)
+#this is the answer to 14 of the 52 questionable inds
+
 #no overlap between individuals in (exploring_2022 & reamp) and (exploring_2022 & polyploid)
+iffy_polyploid_exploration_overlap <- intersect(exploring_2022$SHQ_ID, iffy_putative_polyploids$Name)
+print(iffy_polyploid_exploration_overlap) #10 inds overlap (60 total putative polyploids)
+#this explains 32 of the 52 questionable inds
+#that leaves 6 inds unexplained- are these from MSAT testing?
+
 
 outplanted <- read.csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/QUBR Field Datasheets Nov 2024 - filled - OP Seedlings.csv", na.strings = "N/A")%>%
   rename(QUBR_ID = QUBR.ID)%>%
@@ -370,7 +371,6 @@ RaMP_adults_merging <- RaMP_adults%>%
   select(c(`Blue.tag.ID..`, QUBR_ID, SHQ_ID, TCB_ID, Locality))%>%
   rename(Metal_ID = `Blue.tag.ID..`)%>%
   rename(locality = Locality)
-
 adults_all <- Ash_adults_merging%>%
   rbind(RaMP_adults_merging)
 
@@ -392,16 +392,8 @@ name_decoder_2022 <- final_clean_dedup_data %>%
   filter(Name%in%seedlings_2022$SHQ_ID)%>%
   arrange(Name)
   
-#This code checks each dataset against the TCB ID, but do I also need to check each dataset against each other?
 # Check for duplicate TCB IDs (that aren't dup SHQ IDs)
-# name_decoder_Ash %>%
-#   group_by(TCB_ID) %>%
-#   summarize(n = n()) %>%
-#   filter(n > 1)
-# name_decoder_RaMP %>%
-#   group_by(TCB_ID) %>%
-#   summarize(n = n()) %>%
-#   filter(n > 1)
+#if correct, all should have 0
 name_decoder_adults %>%
   group_by(TCB_ID) %>%
   summarize(n = n()) %>%
@@ -415,77 +407,35 @@ name_decoder_2022 %>%
   summarize(n = n()) %>%
   filter(n > 1)
 
-# Investigating the above NAs in more depth
-# Nas_in_TCBID_RaMP <- name_decoder_RaMP %>%
-#   filter(is.na(TCB_ID))
-Nas_in_TCBID_2022 <- name_decoder_2022 %>%
-  filter(is.na(TCB_ID))
-Nas_in_TCBID_outplanted <- name_decoder_outplanted %>%
-  filter(is.na(TCB_ID))
-# Nas_in_TCBID_Ash <- name_decoder_Ash %>%
-#   filter(is.na(TCB_ID))
-Nas_in_TCBID_adults <- name_decoder_adults %>%
-  filter(is.na(TCB_ID))
-
 
 # Make a df of the genetic data alone (without any of the problematic SHQs above)
-# locus_data_Ash <- final_clean_dedup_data %>%
-#   filter(Name %notin% Nas_in_TCBID_Ash$Name) %>%
-#   arrange(Name) %>% #arrange data so it's in SHQ order
-#   filter(Name %in% name_decoder_Ash$Name)%>%
-#   select(-c(Name, DP_num)) %>% #get rid of any cols that aren't locus data
-#   rename_with(~str_remove(., ' - 1')) #get rid of the -1 at the end of the first allele of a locus
-# 
-# locus_data_RaMP <- final_clean_dedup_data %>%
-#   filter(Name %notin% Nas_in_TCBID_RaMP$Name) %>%
-#   arrange(Name) %>% #arrange data so it's in SHQ order
-#   filter(Name %in% name_decoder_RaMP$Name)%>%
-#   select(-c(Name, DP_num)) %>% #get rid of any cols that aren't locus data
-#   rename_with(~str_remove(., ' - 1')) #get rid of the -1 at the end of the first allele of a locus
-
 locus_data_adults <- final_clean_dedup_data %>%
-  filter(Name %notin% Nas_in_TCBID_adults$Name) %>%
+  #filter(Name %notin% Nas_in_TCBID_adults$Name) %>%
   arrange(Name) %>% #arrange data so it's in SHQ order
   filter(Name %in% name_decoder_adults$Name)%>%
-  select(-c(Name, DP_num)) %>% #get rid of any cols that aren't locus data
+  select(-c(Name, DP_num, need_recheck)) %>% #get rid of any cols that aren't locus data
   rename_with(~str_remove(., ' - 1'))%>% #get rid of the -1 at the end of the first allele of a locus
   rename_with(~str_trim(.))
 
 locus_data_outplanted <- final_clean_dedup_data %>%
-  filter(Name %notin% Nas_in_TCBID_outplanted$Name) %>%
+  #filter(Name %notin% Nas_in_TCBID_outplanted$Name) %>%
   arrange(Name) %>% #arrange data so it's in SHQ order
   filter(Name %in% name_decoder_outplanted$Name)%>%
-  select(-c(Name, DP_num)) %>% #get rid of any cols that aren't locus data
+  select(-c(Name, DP_num, need_recheck)) %>% #get rid of any cols that aren't locus data
   rename_with(~str_remove(., ' - 1'))%>% #get rid of the -1 at the end of the first allele of a locus
   rename_with(~str_trim(.))
 
 locus_data_2022 <- final_clean_dedup_data %>%
-  filter(Name %notin% Nas_in_TCBID_2022$Name) %>%
+  #filter(Name %notin% Nas_in_TCBID_2022$Name) %>%
   arrange(Name) %>% #arrange data so it's in SHQ order
   filter(Name %in% name_decoder_2022$Name)%>%
-  select(-c(Name, DP_num)) %>% #get rid of any cols that aren't locus data
+  select(-c(Name, DP_num, need_recheck)) %>% #get rid of any cols that aren't locus data
   rename_with(~str_remove(., ' - 1'))%>% #get rid of the -1 at the end of the first allele of a locus
   rename_with(~str_trim(.))
 
-####Turning data into genind object####
 
-#RaMP
-# i <- seq.int(1L, ncol(locus_data_RaMP), by = 2L) #make a vector of values that will correlate to the column number of each new locus
-# geno_data_RaMP <- as.data.frame(mapply(paste, locus_data_RaMP[i], locus_data_RaMP[i + 1], sep = "_")) #make a df where the values of each column were the values in the ith and ith + 1 column of my locus data, separated by a _, for all values of i 
-# genind_data_RaMP <- df2genind(geno_data_RaMP, sep = "_", ind.names = name_decoder_RaMP$QUBR_ID) #turn the geno_data into a genind with the designated separator of an _ and the names coming from the name_decoder df
-# 
-# strata(genind_data_RaMP) <- data.frame(locality = name_decoder_RaMP$Locality) #assign the locality to a strata of the genind 
-# setPop(genind_data_RaMP) <- ~locality #turn the locality strata into pop info
-# range(genind_data_RaMP@loc.n.all) #get the range of number of alleles per locus 
-# 
-# #Ash
-# i <- seq.int(1L, ncol(locus_data_Ash), by = 2L) #make a vector of values that will correlate to the column number of each new locus
-# geno_data_Ash <- as.data.frame(mapply(paste, locus_data_Ash[i], locus_data_Ash[i + 1], sep = "_")) #make a df where the values of each column were the values in the ith and ith + 1 column of my locus data, separated by a _, for all values of i 
-# genind_data_Ash <- df2genind(geno_data_Ash, sep = "_", ind.names = name_decoder_Ash$QUBR_ID) #turn the geno_data into a genind with the designated seperator of an _ and the names coming from the name_decoder df
-# 
-# strata(genind_data_Ash) <- data.frame(locality = name_decoder_Ash$locality) #assign the locality to a strata of the genind 
-# setPop(genind_data_Ash) <- ~locality #turn the locality strata into pop info
-# range(genind_data_Ash@loc.n.all) #get the range of number of alleles per locus 
+
+####Turning data into genind object####
 
 #Adults
 i <- seq.int(1L, ncol(locus_data_adults), by = 2L) #make a vector of values that will correlate to the column number of each new locus
@@ -494,7 +444,7 @@ genind_data_adults <- df2genind(geno_data_adults, sep = "_", ind.names = name_de
 
 strata(genind_data_adults) <- data.frame(locality = name_decoder_adults$locality) #assign the locality to a strata of the genind 
 setPop(genind_data_adults) <- ~locality #turn the locality strata into pop info
-range(genind_data_adults@loc.n.all) #get the range of number of alleles per locus 
+range(genind_data_adults@loc.n.all) #get the range of number of alleles per locus (min and max)
 
 #OP
 i <- seq.int(1L, ncol(locus_data_outplanted), by = 2L) #make a vector of values that will correlate to the column number of each new locus
@@ -513,10 +463,6 @@ genind_data_2022 <- df2genind(geno_data_2022, sep = "_", ind.names = name_decode
 #strata(genind_data_2022) <- data.frame(locality = name_decoder_2022$locality) #assign the locality to a strata of the genind 
 #setPop(genind_data_2022) <- ~locality #turn the locality strata into pop info
 range(genind_data_2022@loc.n.all) #get the range of number of alleles per locus 
-
-#2022 does not all have locality data? probably don't assign populations
-#outplanted will use Ranch
-#RaMP will use Locality
 
 ####Assigning MLL clones w/ genetic distance####
 #Only for adults
