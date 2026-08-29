@@ -89,7 +89,6 @@ all_data <- reduce(lapply(MP_list_RaMP, function(MP){
 
 ####Cleaning the data####
 
-
 #THIS IS NOT RELEVANT UNTIL TRIPLOIDS ARE SCORED
 #Code below removes the 3rd allele possibility from locus 08_529 so that locus matches the rest of the data (from all other loci)
 #all_data <- all_data %>%
@@ -125,7 +124,6 @@ ggplot() +
   geom_point(data = prop_inds_polyploid, aes(x = locus, y = prop_polyploid)) +
   scale_x_discrete(guide = guide_axis(angle = 90)) + #turn the axis label so locus names are legible 
   theme_minimal()
-
 
 ## Exploring the proportion of polyploid loci *per individual*
 
@@ -227,6 +225,7 @@ check_NA <- data_tmp %>%
 #all of the inds that get flagged are places where the dup (_B) is in an earlier DP than the original
 
 
+
 ####Dealing w/ duplicate data####  
 
 ## Checking that dups match each other at every allele
@@ -313,7 +312,21 @@ RaMP_adults <- read.csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic An
   left_join(., TCB_QUBR_IDs, by = join_by(QUBR_ID == Tissue_ID)) %>% #merge w/ SHQ database by the QUBR IDs
   rename(SHQ_ID = `Extraction Tube #`)%>%
   filter(Locality %notin% c('LS', 'LT', 'SB'))
-exploring_RaMP <- RaMP_adults%>%filter(SHQ_ID%notin%final_clean_dedup_data$Name) #looks at individuals which are missing from our data (they were used for testing)
+
+#why were these 18 individuals being filtered out?
+exploring_RaMP <- RaMP_adults%>%filter(SHQ_ID%notin%final_clean_dedup_data$Name)%>% #looks at individuals which are missing from our data (they were used for testing?)
+  filter(!str_detect(`Notes.comments`, "low"))%>% #leaves were not collected from this tree
+  filter(QUBR_ID != "QUBR_LB_0032")%>% #A/B duplicates during tissue transfer
+  filter(QUBR_ID != "QUBR_LB_0034")%>% #didn't exist during tissue transfer
+  filter(QUBR_ID != "QUBR_LB_0025")%>% #no peaks at 03_284
+  filter(QUBR_ID != "QUBR_EC_0109")%>% #too many alleles at 02_745
+  filter(QUBR_ID != "QUBR_LB_0047")%>% #too many alleles at 05_282
+  filter(QUBR_ID != "QUBR_LB_0078")%>% #too many alleles at 05_282
+  filter(QUBR_ID != "QUBR_LB_0086")%>% #too many alleles at 05_282
+  filter(QUBR_ID != "QUBR_LB_0090")%>% #too many alleles at 05_282
+  filter(QUBR_ID != "QUBR_SDo_0013")%>% #too many alleles at 07_187
+  filter(!is.na(TCB_ID)) #not actual individuals, notes in datasheet
+#the 6 remaining inds were used for MSAT testing
 
 seedlings_2022 <- read.csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/04_2024_field_datasheets_full.xlsx - 2022 seedlings.csv")%>%
   rename(QUBR_ID = QUBR.ID)%>%
@@ -338,6 +351,7 @@ print(iffy_polyploid_exploration_overlap) #10 inds overlap (60 total putative po
 #that leaves 6 inds unexplained- are these from MSAT testing?
 
 
+#reading in field data for the remaining generations
 outplanted <- read.csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs/QUBR Field Datasheets Nov 2024 - filled - OP Seedlings.csv", na.strings = "N/A")%>%
   rename(QUBR_ID = QUBR.ID)%>%
   filter(!is.na(QUBR_ID))%>%
@@ -349,7 +363,6 @@ Ash_adults <- read_csv("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Ana
   mutate(QUBR_ID = paste0("QUBR_", QUBR_ID)) %>% #adding QUBR to the QUBR IDs so they match the IDs in the TCB database
   left_join(., TCB_QUBR_IDs, by = join_by(QUBR_ID == Tissue_ID)) %>% #merge w/ SHQ database by the QUBR IDs
   rename(SHQ_ID = `Extraction Tube #`)
-
 
 # Make a db that will serve to decode the names (Sh-Q IDs) in the genetic data
 name_decoder_RaMP <- final_clean_dedup_data %>%
@@ -433,6 +446,139 @@ locus_data_2022 <- final_clean_dedup_data %>%
   rename_with(~str_remove(., ' - 1'))%>% #get rid of the -1 at the end of the first allele of a locus
   rename_with(~str_trim(.))
 
+####Confidence in polyploidy####
+#Exploring the distribution and confidence of putative polyploids across generations
+nrow(putative_polyploids) #60
+nrow(iffy_putative_polyploids) #54
+#114 individuals total
+
+#adds a column for defining generation
+putative_polyploids <- putative_polyploids%>%
+  mutate(generation="generation")
+
+#limits columns to only show information on generation and num_loci_polyploid
+seedling_putative_polyploids <- left_join(putative_polyploids, seedlings_2022, by = c("Name" = "SHQ_ID"))%>%
+  filter(!is.na(QUBR_ID))%>%
+  select(Name, DP_num, num_loci_polyploid)%>%
+  mutate(generation = "2022")
+nrow(seedling_putative_polyploids) #n=10
+adult_putative_polyploids <- left_join(putative_polyploids, adults_all, by = c("Name" = "SHQ_ID"))%>%
+  filter(!is.na(QUBR_ID))%>%
+  select(Name, DP_num, num_loci_polyploid)%>%
+  mutate(generation = "adult")
+nrow(adult_putative_polyploids) #n=47
+OP_putative_polyploids <- left_join(putative_polyploids, outplanted, by = c("Name" = "SHQ_ID"))%>%
+  filter(!is.na(QUBR_ID))%>%
+  select(Name, DP_num, num_loci_polyploid)%>%
+  mutate(generation = "OP")
+nrow(OP_putative_polyploids) #n=2
+
+#combines information on all generations
+exploring_putative_polyploids <- bind_rows(seedling_putative_polyploids, adult_putative_polyploids, OP_putative_polyploids)%>%
+  mutate(polyploid_confidence = "multi")
+#SH-Q5618 is getting dropped: why?
+#adult, QUBR_LC_320, TCB-04137
+#does not exist in Ash_adults, RaMP_adults
+#does exist in putative_polyploids
+#It is present in Ash's raw data files for MP1 & MP4
+
+#We are less confident that individuals with only one polyploid loci are actually polyploids
+#single loci polyploids are referred to as 'iffy'
+iffy_seedling_putative_polyploids <- left_join(iffy_putative_polyploids, seedlings_2022, by = c("Name" = "SHQ_ID"))%>%
+  filter(!is.na(QUBR_ID))%>%
+  select(Name, DP_num, num_loci_polyploid)%>%
+  mutate(generation = "2022")
+iffy_adult_putative_polyploids <- left_join(iffy_putative_polyploids, adults_all, by = c("Name" = "SHQ_ID"))%>%
+  filter(!is.na(QUBR_ID))%>%
+  select(Name, DP_num, num_loci_polyploid)%>%
+  mutate(generation = "adult")
+iffy_OP_putative_polyploids <- left_join(iffy_putative_polyploids, outplanted, by = c("Name" = "SHQ_ID"))%>%
+  filter(!is.na(QUBR_ID))%>%
+  select(Name, DP_num, num_loci_polyploid)%>%
+  mutate(generation = "OP")
+
+exploring_iffy_putative_polyploids <- bind_rows(iffy_seedling_putative_polyploids, iffy_adult_putative_polyploids, iffy_OP_putative_polyploids)%>%
+  mutate(polyploid_confidence = "single")
+#SH-Q4091_B is getting dropped, this is a seedling
+#I think its just because of the _B
+
+#Looking only at our subset of individuals that are putative polyploids:
+visualizing_putative_polyploids <- bind_rows(exploring_putative_polyploids, exploring_iffy_putative_polyploids)
+
+#how confident are we in identifying the NUMBER of polyploids in each generation?
+visualizing_putative_polyploids%>%
+  ggplot(aes(x=generation, fill=polyploid_confidence))+
+  geom_bar() +
+  scale_x_discrete(labels = c("2022" = "2022 (n=43)", "adult" = "adult (n=63)", "OP" = "OP (n=6)"))+
+  ylab("number of individuals") +
+  labs(fill = "confidence") +
+  ggtitle("Number of polyploids per generation") +
+  theme_classic()
+
+#how confident are we in identifying the PROPORTION of polyploids in each generation?
+visualizing_putative_polyploids%>%
+  ggplot()+
+  geom_bar(aes(x=generation, fill=polyploid_confidence), position = "fill") +
+  scale_x_discrete(labels = c("2022" = "2022 (n=43)", "adult" = "adult (n=63)", "OP" = "OP (n=6)"))+
+  ylab("proportion of individuals") +
+  labs(fill = "confidence") +
+  ggtitle("Proportion of polyploids per generation") +
+  theme_classic()
+
+#Looking at our putative_polyploids in the context of all individuals tested:
+
+#assigns a generation to each df
+prop_poly_adults_all <- adults_all%>%
+  mutate(generation = "adult")%>%
+  select(SHQ_ID, generation)%>%
+  filter(!is.na(SHQ_ID))
+prop_poly_seedlings_2022 <- seedlings_2022%>%
+  mutate(generation = "2022")%>%
+  select(SHQ_ID, generation)%>%
+  filter(!is.na(SHQ_ID))
+prop_poly_outplanted <- outplanted%>%
+  mutate(generation = "OP")%>%
+  select(SHQ_ID, generation)%>%
+  filter(!is.na(SHQ_ID))
+
+#adds in all of our individuals and labels the ones that were not polyploid as "none"
+prop_poly_all <- rbind(prop_poly_adults_all, prop_poly_outplanted, prop_poly_seedlings_2022)%>%
+  rename(Name = SHQ_ID)%>%
+  left_join(select(visualizing_putative_polyploids, Name, num_loci_polyploid), by = "Name")%>%
+  mutate(polyploid_num = case_when(num_loci_polyploid == "1" ~ "single",
+                                   num_loci_polyploid >1 ~ "multi",
+                                   is.na(num_loci_polyploid) ~ "none"))
+
+#defines the order to read polyploid_num
+prop_poly_all$polyploid_num <- factor(prop_poly_all$polyploid_num, levels = c("multi", "single", "none"))
+
+#how many individuals from each generation are polyploid?
+prop_poly_all%>%
+  ggplot()+
+  geom_bar(aes(x=generation, fill = polyploid_num))+
+  scale_x_discrete(labels = c("2022" = "2022 (n=598)", "adult" = "adult (n=1023)", "OP" = "OP (n=126)"))+
+  ggtitle("# of polyploid individuals per generation") +
+  theme_classic()
+
+#what proportion of individuals from each generation are polyploid?
+prop_poly_all%>%
+  ggplot()+
+  geom_bar(aes(x=generation, fill = polyploid_num), position = "fill")+
+  scale_x_discrete(labels = c("2022" = "2022 (n=598)", "adult" = "adult (n=1023)", "OP" = "OP (n=126)"))+
+  #scale_y_continuous(labels = c("0%", "25%", "50", "75%", "100%"))+
+  ggtitle("% of polyploid individuals per generation") +
+  theme_classic()
+
+#same as above:
+#since there are so many non-polyploid individuals in this figure, it is more informative to look only at the top 10% 
+prop_poly_all%>%
+  ggplot()+
+  geom_bar(aes(x=generation, fill = polyploid_num), position = "fill")+
+  scale_x_discrete(labels = c("2022" = "2022 (n=598)", "adult" = "adult (n=1023)", "OP" = "OP (n=126)"))+
+  coord_cartesian(ylim = c(0.9, 1))+ # Prevents accidental data clipping
+  scale_y_continuous(labels = c("90%", "92.5%", "95%", "97.5%", "100%"))+
+  ggtitle("% of polyploid individuals per generation \n (top 10%)")+
+  theme_classic()
 
 
 ####Turning data into genind object####
@@ -483,22 +629,21 @@ replen_real <- replen_info$`Repeat length (in real scores)`
 test_replen(genind_data_adults, replen_real) #if any of these come up as false, there might be some incorrectly labelled bins in geneious that need to be edited (but it shouldn't affect future analyses very much)
 
 replen_real <- fix_replen(genind_data_adults, replen_real, e = 1e-05, fix_some = TRUE)
+#error: The repeat lengths for 05_468, 02_754 are not consistent.
+#Repeat lengths with some modification are being returned: 02_876
+
 
 ### Actually assigning the clones (MLLs) in the adult data
 unique(genind_data_adults@pop) #determine which pop is which
 
 ## LM
 LM <- popsub(genind_data_adults,1)
-
 # Make a genetic distance matrix for each population
 gen_dists_LM <- as.matrix(bruvo.dist(popsub(genind_data_adults,1), replen = replen_real))
-
 # Determine what genetic distance threshold is best for the given population
 thresholds <- mlg.filter(LM, distance = "bruvo.dist", stats = "THRESHOLDS", replen = replen_real, algorithm = "nearest_neighbor", threshold = 1)
 cutoff <- cutoff_predictor(thresholds)
-
 LM_genclone <- as.genclone(LM)
-
 # Use the pre-determined genetic distance threshold to assign MLLs (unique clones) to the given adult population data
 mlg.filter(LM_genclone, distance = "bruvo.dist", replen = replen_real) <- cutoff
 LM_genclone # look at the summary for the given population 
@@ -509,12 +654,9 @@ LM_genclone # look at the summary for the given population
 ## LC
 LC <- popsub(genind_data_adults,2)
 gen_dists_LC <- as.matrix(bruvo.dist(LC, replen =  replen_real))
-
 LC_genclone <- as.genclone(LC)
-
 thresholds <- mlg.filter(LC, distance = "bruvo.dist", stats = "THRESHOLDS", replen = replen_real, algorithm = "nearest_neighbor", threshold = 1)
 cutoff <- cutoff_predictor(thresholds)
-
 mlg.filter(LC_genclone, distance = "bruvo.dist", replen = replen_real) <- cutoff
 LC_genclone
 
@@ -524,28 +666,21 @@ LC_genclone
 ## SD
 SD <- popsub(genind_data_adults,3)
 gen_dists_SD <- as.matrix(bruvo.dist(SD, replen =  replen_real))
-
 SD_genclone <- as.genclone(SD)
-
 thresholds <- mlg.filter(SD, distance = "bruvo.dist", stats = "THRESHOLDS", replen = replen_real, algorithm = "nearest_neighbor", threshold = 1)
 cutoff <- cutoff_predictor(thresholds)
-
 mlg.filter(SD_genclone, distance = "bruvo.dist", replen = replen_real) <- cutoff
 SD_genclone
 
 # length(unique(SD@mlg))
 # diversity_stats(mlg.table(SD))
 
-
 ## SDo
 SDo <- popsub(genind_data_adults,4)
 gen_dists_SDo <- as.matrix(bruvo.dist(SDo, replen =  replen_real))
-
 SDo_genclone <- as.genclone(SDo)
-
 thresholds <- mlg.filter(SDo, distance = "bruvo.dist", stats = "THRESHOLDS", replen = replen_real, algorithm = "nearest_neighbor", threshold = 1)
 cutoff <- cutoff_predictor(thresholds)
-
 mlg.filter(SDo_genclone, distance = "bruvo.dist", replen = replen_real) <- cutoff
 SDo_genclone
 
@@ -555,12 +690,9 @@ SDo_genclone
 ## LB
 LB <- popsub(genind_data_adults,5)
 gen_dists_LB <- as.matrix(bruvo.dist(LB, replen =  replen_real))
-
 LB_genclone <- as.genclone(LB)
-
 thresholds <- mlg.filter(LB, distance = "bruvo.dist", stats = "THRESHOLDS", replen = replen_real, algorithm = "nearest_neighbor", threshold = 1)
 cutoff <- cutoff_predictor(thresholds)
-
 mlg.filter(LB_genclone, distance = "bruvo.dist", replen = replen_real) <- cutoff
 LB_genclone
 
@@ -570,12 +702,9 @@ LB_genclone
 ## EC
 EC <- popsub(genind_data_adults,6)
 gen_dists_EC <- as.matrix(bruvo.dist(EC, replen =  replen_real))
-
 EC_genclone <- as.genclone(EC)
-
 thresholds <- mlg.filter(EC, distance = "bruvo.dist", stats = "THRESHOLDS", replen = replen_real, algorithm = "nearest_neighbor", threshold = 1)
 cutoff <- cutoff_predictor(thresholds)
-
 mlg.filter(EC_genclone, distance = "bruvo.dist", replen = replen_real) <- cutoff
 EC_genclone
 
@@ -587,42 +716,36 @@ EC_genclone
 
 ## LM
 clone_info <- mll(LM)
-
 LM_decoder <- name_decoder_adults %>%
   filter(QUBR_ID %in% indNames(LM)) %>% #keep only the QUBR IDs of the inds at the given pop in the decoder
   cbind(clone_info) #add a column with the mll assignment info at that pop
 
 ## LC
 clone_info <- mll(LC)
-
 LC_decoder <- name_decoder_adults %>%
   filter(QUBR_ID %in% indNames(LC)) %>% #keep only the QUBR IDs of the inds at the given pop in the decoder
   cbind(clone_info) #add a column with the mll assignment info at that pop
 
 ## SD
 clone_info <- mll(SD)
-
 SD_decoder <- name_decoder_adults %>%
   filter(QUBR_ID %in% indNames(SD)) %>% #keep only the QUBR IDs of the inds at the given pop in the decoder
   cbind(clone_info) #add a column with the mll assignment info at that pop
 
 ## SDo
 clone_info <- mll(SDo)
-
 SDo_decoder <- name_decoder_adults %>%
   filter(QUBR_ID %in% indNames(SDo)) %>% #keep only the QUBR IDs of the inds at the given pop in the decoder
   cbind(clone_info) #add a column with the mll assignment info at that pop
 
 ## LB
 clone_info <- mll(LB)
-
 LB_decoder <- name_decoder_adults %>%
   filter(QUBR_ID %in% indNames(LB)) %>% #keep only the QUBR IDs of the inds at the given pop in the decoder
   cbind(clone_info) #add a column with the mll assignment info at that pop
 
 ## EC
 clone_info <- mll(EC)
-
 EC_decoder <- name_decoder_adults %>%
   filter(QUBR_ID %in% indNames(EC)) %>% #keep only the QUBR IDs of the inds at the given pop in the decoder
   cbind(clone_info) #add a column with the mll assignment info at that pop
@@ -630,10 +753,8 @@ EC_decoder <- name_decoder_adults %>%
 # Finally, rbind all the individual population data back together  
 name_decoder_MLLs <- rbind(LM_decoder, LC_decoder, SD_decoder, SDo_decoder, LB_decoder, EC_decoder)
 
-
 ## Turn the genind data into a single large genclone so it can be corrected
 MLL_genclone_data <- as.genclone(genind_data_adults, mlg = name_decoder_MLLs$clone_info)
-
 
 # Correct all of the adult data (remove duplicate observations of the same MLL) such that all genetic diversity statistics will be performed only on the unique MLLS
 MLL_corrected_data <- clonecorrect(MLL_genclone_data)
@@ -781,6 +902,7 @@ private_alleles_adults_2022 <- tibble(private_alleles(adults_and_2022, form = al
   filter(population=="Adult")%>%
   mutate(locus.allele=paste0(locus, ".", allele))
 
+#*
 allele_freq_adults_2022 <- as.tibble(makefreq(MLL_genpop_corr_data), rownames="pop")%>%
   select(c(pop, private_alleles_adults_2022$locus.allele))
 
@@ -815,7 +937,15 @@ only_OP <- allele_freq_only_OP%>%
   cbind()
 
 
+#frequency of each allele in adults at every locus
+#Function: makefreq
+#Input will be genind of just adults with no population added, Will make a matrix
+#One row : pop, Columns: alleles (there will be many)
+#Pivot longer
+#We can also add case_when allele type to see what kinds of alleles we lose
 
+?makefreq
+makefreq()
 
 
 ####Figures####
