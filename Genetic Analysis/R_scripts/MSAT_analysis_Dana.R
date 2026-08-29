@@ -481,6 +481,7 @@ exploring_putative_polyploids <- bind_rows(seedling_putative_polyploids, adult_p
 #does not exist in Ash_adults, RaMP_adults
 #does exist in putative_polyploids
 #It is present in Ash's raw data files for MP1 & MP4
+#This is a duplicate for LC_133 that we collected from twice
 
 #We are less confident that individuals with only one polyploid loci are actually polyploids
 #single loci polyploids are referred to as 'iffy'
@@ -501,6 +502,7 @@ exploring_iffy_putative_polyploids <- bind_rows(iffy_seedling_putative_polyploid
   mutate(polyploid_confidence = "single")
 #SH-Q4091_B is getting dropped, this is a seedling
 #I think its just because of the _B
+#This is correct! We identified it once as polyploid and once as not, so the _B was lost
 
 #Looking only at our subset of individuals that are putative polyploids:
 visualizing_putative_polyploids <- bind_rows(exploring_putative_polyploids, exploring_iffy_putative_polyploids)
@@ -635,6 +637,7 @@ replen_real <- fix_replen(genind_data_adults, replen_real, e = 1e-05, fix_some =
 
 ### Actually assigning the clones (MLLs) in the adult data
 unique(genind_data_adults@pop) #determine which pop is which
+#returns NULL
 
 ## LM
 LM <- popsub(genind_data_adults,1)
@@ -902,7 +905,6 @@ private_alleles_adults_2022 <- tibble(private_alleles(adults_and_2022, form = al
   filter(population=="Adult")%>%
   mutate(locus.allele=paste0(locus, ".", allele))
 
-#*
 allele_freq_adults_2022 <- as.tibble(makefreq(MLL_genpop_corr_data), rownames="pop")%>%
   select(c(pop, private_alleles_adults_2022$locus.allele))
 
@@ -944,8 +946,47 @@ only_OP <- allele_freq_only_OP%>%
 #Pivot longer
 #We can also add case_when allele type to see what kinds of alleles we lose
 
-?makefreq
-makefreq()
+
+allele_freq_2022 <- as.tibble(makefreq(genind2genpop(genind_data_2022)))%>%
+  pivot_longer(cols = everything(), names_to = "locus.allele", values_to = "freq")%>%
+  mutate(allele=str_extract(locus.allele, "(?<=\\.).+"))%>% #separates the locus and allele numbers into separate columns
+  mutate(locus = str_extract(locus.allele, ".+(?=\\.)"))%>%
+  mutate(pop="2022")
+
+allele_freq_OP <- as.tibble(makefreq(genind2genpop(genind_data_outplanted)))%>%
+  pivot_longer(cols = everything(), names_to = "locus.allele", values_to = "freq")%>%
+  mutate(allele=str_extract(locus.allele, "(?<=\\.).+"))%>% #separates the locus and allele numbers into separate columns
+  mutate(locus = str_extract(locus.allele, ".+(?=\\.)"))%>%
+  mutate(pop="OP")
+
+#allele_freq_all <- rbind(allele_freq_adults, allele_freq_2022, allele_freq_OP)
+
+
+#which alleles in a given population are also in the progeny?
+
+
+
+allele_freq_adults <- as.tibble(makefreq(MLL_genpop_corr_data), rownames="pop")%>%
+  pivot_longer(cols = -c("pop"), names_to = "locus.allele", values_to = "freq")%>%
+  mutate(allele=str_extract(locus.allele, "(?<=\\.).+"))%>% #separates the locus and allele numbers into separate columns
+  mutate(locus = str_extract(locus.allele, ".+(?=\\.)"))%>%
+  mutate(allele_cat = case_when(freq = 0 ~ "not present",
+                                freq <0.05 ~ "rare",
+                                freq >=0.05 & freq <0.10 ~ "uncommon"))%>%
+  mutate(present_in_2022=case_when(locus.allele %in% allele_freq_2022$locus.allele ~ T, .default = F))%>%
+  mutate(present_in_OP=case_when(locus.allele %in% allele_freq_OP$locus.allele ~ T, .default = F))
+  
+
+#rare, common, etc. based on Schumacher paper
+
+#stacked bar graph showing each allele categories (Counts of true/false)
+#separate figures for 2022 and OP
+#x = population
+#facet by allele_freq_cat
+#add freq category for adults that is "not present"
+
+#ANOVA?
+#send Ash genind using save() for all pops to make a .r
 
 
 ####Figures####
