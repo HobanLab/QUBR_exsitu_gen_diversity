@@ -952,7 +952,10 @@ allele_freq_2022 <- as.tibble(makefreq(genind2genpop(genind_data_2022)))%>%
                                 freq <=0.01 ~ "rare",
                                 freq <0.1 & freq >0.01 ~ "low",
                                 freq >= 0.1 ~ "common"))%>%
-  mutate(allele_cat = factor(allele_cat, levels = c("not present", "rare", "low", "common")))
+  mutate(allele_cat = factor(allele_cat, levels = c("not present", "rare", "low", "common")))%>%
+  rename(freq_2022 = "freq")%>%
+  rename(allele_cat_2022 = "allele_cat")
+
 
 allele_freq_OP <- as.tibble(makefreq(genind2genpop(genind_data_OP)))%>%
   pivot_longer(cols = everything(), names_to = "locus.allele", values_to = "freq")%>%
@@ -964,7 +967,10 @@ allele_freq_OP <- as.tibble(makefreq(genind2genpop(genind_data_OP)))%>%
                                 freq <=0.01 ~ "rare",
                                 freq <0.1 & freq >0.01 ~ "low",
                                 freq >= 0.1 ~ "common"))%>%
-  mutate(allele_cat = factor(allele_cat, levels = c("not present", "rare", "low", "common")))
+  mutate(allele_cat = factor(allele_cat, levels = c("not present", "rare", "low", "common")))%>%
+  rename(freq_OP = "freq")%>%
+  rename(allele_cat_OP = "allele_cat")
+
 
 
 #which alleles in a given population are also in the progeny?
@@ -1009,8 +1015,9 @@ prop_poly_all%>%
 
 
 
-allele_stats_adult$allele_cat <- factor(allele_stats_adult$allele_cat, levels = c("not present", "rare", "low", "common"))
-
+allele_stats_adult$allele_cat <- factor(allele_stats_adult$allele_cat, levels = c("common", "rare", "low", "not present"))
+#c("not present", "rare", "low", "common"))
+#c("common", "rare", "low", "not present"))
 
 #allele_cat frequencies for each adult population
 P1 <- allele_freq_adults %>%
@@ -1021,9 +1028,9 @@ P1 <- allele_freq_adults %>%
   labs(x = "population", y = "# of alleles", fill = "allele frequency")+
   ggtitle("allele category frequencies in adult populations")+
   #geom_text(
-  #  data = allele_stats_adult,
-  #  aes(x = pop, y = count, label = count),
-  #  position = position_stack(vjust = 0.75))+
+    #data = allele_stats_adult,
+    #aes(x = pop, y = count, label = count),
+    #position = position_stack(vjust = 0.75))+
   theme_classic()
 P1
 
@@ -1152,6 +1159,92 @@ P4
 #the way I accomplished this has nothing to do with true/false- hope this is still right?
 
 #ANOVA?
+
+allele_freq_allgen <- allele_freq_adults%>%
+  rename(freq_adult = "freq")%>%
+  rename(allele_cat_adult = "allele_cat")%>%
+  left_join(., select(allele_freq_2022, freq_2022, allele_cat_2022, locus.allele), by = "locus.allele")%>%
+  left_join(., select(allele_freq_OP, freq_OP, allele_cat_OP, locus.allele), by = "locus.allele")%>%
+  mutate(across(starts_with("freq"), ~str_replace_na(.x, replacement = "0")))%>%
+  mutate(across(starts_with("allele_"), ~str_replace_na(.x, replacement = "not present")))%>%
+  mutate(across(starts_with("allele_"), ~factor(.x, levels = c("common", "low", "rare", "not present"))))
+  
+
+allele_freq_allgen %>%
+  ggplot()+
+  geom_bar(aes(x = allele_cat_adult, fill = allele_cat_OP))+
+  #scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
+  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4", "#C77CFF"))+
+  labs(x = "adult allele frequency", y = "# of alleles", fill = "OP allele frequency")+
+  ggtitle("allele category frequencies in adult populations")+
+  theme_classic()+
+  facet_wrap(~pop)
+
+
+MLL_genind_data <- genclone2genind(MLL_genclone_data)
+
+strata(MLL_genind_data) <- data.frame(pop=rep("adult", length.out=nInd(MLL_genind_data)))
+
+setPop(MLL_genind_data) <- ~pop
+
+MLL_genpop_data_nopop<- genind2genpop(MLL_genind_data)
+
+
+numOP <- nInd(genind_data_OP)
+num2022 <- nInd(genind_data_2022)
+
+allele_freq_adults_nopop <- as.tibble(makefreq(MLL_genpop_data_nopop))%>%
+  pivot_longer(cols=everything(), names_to = "locus.allele", values_to = "freq")%>%
+  mutate(allele=str_extract(locus.allele, "(?<=\\.).+"))%>% #separates the locus and allele numbers into separate columns
+  mutate(locus = str_extract(locus.allele, ".+(?=\\.)"))%>%
+  mutate(allele_cat = case_when(freq == 0 ~ "not present",
+                                freq <=0.01 ~ "rare",
+                                freq <0.1 & freq >0.01 ~ "low",
+                                freq >= 0.1 ~ "common"))%>%
+  mutate(gen="adult")%>%
+  mutate(allele_cat = factor(allele_cat, levels = c("not present", "rare", "low", "common")))%>%
+  rename(freq_adult = "freq")%>%
+  rename(allele_cat_adult = "allele_cat")%>%
+  left_join(., select(allele_freq_2022, freq_2022, allele_cat_2022, locus.allele), by = "locus.allele")%>%
+  left_join(., select(allele_freq_OP, freq_OP, allele_cat_OP, locus.allele), by = "locus.allele")%>%
+  mutate(across(starts_with("freq"), ~str_replace_na(.x, replacement = "0")))%>%
+  mutate(across(starts_with("allele_"), ~str_replace_na(.x, replacement = "not present")))%>%
+  mutate(across(starts_with("allele_"), ~factor(.x, levels = c("common", "low", "rare", "not present"))))%>%
+  mutate(allele_count_OP = as.numeric(freq_OP)*2*numOP)%>%
+  mutate(allele_count_2022 = as.numeric(freq_2022)*2*num2022)
+
+#comparable to Table 1 in Schumacher paper
+perc_alleles_OP <- allele_freq_adults_nopop%>%
+  mutate(grt1 = case_when(allele_count_OP >=1 ~ TRUE,
+                          .default = FALSE),
+         grt2 = case_when(allele_count_OP >=2 ~ TRUE,
+                          .default = FALSE),
+         grt5 = case_when(allele_count_OP >=5 ~ TRUE,
+                          .default = FALSE),
+         grt10 = case_when(allele_count_OP >=10 ~ TRUE,
+                          .default = FALSE))%>%
+  group_by(allele_cat_adult)%>%
+  mutate(grt1 = sum(grt1)/nrow(allele_freq_adults_nopop)*100, 
+         grt2 = sum(grt2)/nrow(allele_freq_adults_nopop)*100,
+         grt5 = sum(grt5)/nrow(allele_freq_adults_nopop)*100,
+         grt10 = sum(grt10)/nrow(allele_freq_adults_nopop)*100)%>%
+  distinct(allele_cat_adult, .keep_all = TRUE)%>%
+  select(c(allele_cat_adult, grt1, grt2, grt5, grt10))
+
+#REPEAT FOR 2022s
+#also make the 2022 figure
+
+
+#GLOBAL
+allele_freq_adults_nopop %>%
+  ggplot()+
+  geom_bar(aes(x = allele_cat_adult, fill = allele_cat_OP), position = "fill")+
+  #scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
+  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4", "#C77CFF"))+
+  labs(x = "adult allele frequency", y = "proportion of alleles", fill = "OP allele frequency")+
+  ggtitle("allele category frequencies in adult populations")+
+  theme_classic()
+
 
 
 ####Figures####
