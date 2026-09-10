@@ -1169,8 +1169,8 @@ allele_freq_allgen <- allele_freq_adults%>%
   mutate(across(starts_with("allele_"), ~str_replace_na(.x, replacement = "not present")))%>%
   mutate(across(starts_with("allele_"), ~factor(.x, levels = c("common", "low", "rare", "not present"))))
   
-
-allele_freq_allgen %>%
+#OP
+ACFA <- allele_freq_allgen %>%
   ggplot()+
   geom_bar(aes(x = allele_cat_adult, fill = allele_cat_OP))+
   #scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
@@ -1180,6 +1180,18 @@ allele_freq_allgen %>%
   theme_classic()+
   facet_wrap(~pop)
 
+#2022
+ACF2022 <- allele_freq_allgen %>%
+  ggplot()+
+  geom_bar(aes(x = allele_cat_adult, fill = allele_cat_2022))+
+  #scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
+  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4", "#C77CFF"))+
+  labs(x = "adult allele frequency", y = "# of alleles", fill = "2022 allele frequency")+
+  ggtitle("allele category frequencies in adult populations")+
+  theme_classic()+
+  facet_wrap(~pop)
+
+ACFA + ACF2022
 
 MLL_genind_data <- genclone2genind(MLL_genclone_data)
 
@@ -1214,6 +1226,7 @@ allele_freq_adults_nopop <- as.tibble(makefreq(MLL_genpop_data_nopop))%>%
   mutate(allele_count_2022 = as.numeric(freq_2022)*2*num2022)
 
 #comparable to Table 1 in Schumacher paper
+#OP allele frequencies
 perc_alleles_OP <- allele_freq_adults_nopop%>%
   mutate(grt1 = case_when(allele_count_OP >=1 ~ TRUE,
                           .default = FALSE),
@@ -1231,9 +1244,25 @@ perc_alleles_OP <- allele_freq_adults_nopop%>%
   distinct(allele_cat_adult, .keep_all = TRUE)%>%
   select(c(allele_cat_adult, grt1, grt2, grt5, grt10))
 
-#REPEAT FOR 2022s
-#also make the 2022 figure
+#unclear whether these frequencies make sense for the common alleles?
 
+#2022 allele frequencies
+perc_alleles_2022 <- allele_freq_adults_nopop%>%
+  mutate(grt1 = case_when(allele_count_2022 >=1 ~ TRUE, #defines allele frequencies re: Schumacher Table 1
+                          .default = FALSE),
+         grt2 = case_when(allele_count_2022 >=2 ~ TRUE,
+                          .default = FALSE),
+         grt5 = case_when(allele_count_2022 >=5 ~ TRUE,
+                          .default = FALSE),
+         grt10 = case_when(allele_count_2022 >=10 ~ TRUE,
+                           .default = FALSE))%>%
+  group_by(allele_cat_adult)%>%
+  mutate(grt1 = sum(grt1)/nrow(allele_freq_adults_nopop)*100, 
+         grt2 = sum(grt2)/nrow(allele_freq_adults_nopop)*100,
+         grt5 = sum(grt5)/nrow(allele_freq_adults_nopop)*100,
+         grt10 = sum(grt10)/nrow(allele_freq_adults_nopop)*100)%>%
+  distinct(allele_cat_adult, .keep_all = TRUE)%>%
+  select(c(allele_cat_adult, grt1, grt2, grt5, grt10))
 
 #GLOBAL
 allele_freq_adults_nopop %>%
@@ -1244,6 +1273,23 @@ allele_freq_adults_nopop %>%
   labs(x = "adult allele frequency", y = "proportion of alleles", fill = "OP allele frequency")+
   ggtitle("allele category frequencies in adult populations")+
   theme_classic()
+
+#NEW FIGURES
+#2022
+allele_freq_allgen %>%
+  ggplot()+
+  geom_bar(aes(x = allele_cat_adult, fill = allele_cat_2022))+
+  #scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
+  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4", "#C77CFF"))+
+  labs(x = "adult allele frequency", y = "# of alleles", fill = "2022 allele frequency")+
+  ggtitle("allele category frequencies in adult populations")+
+  theme_classic()+
+  facet_wrap(~pop)
+
+allele_freq_allgen%>%
+  ggplot()+
+  geom_bar(aes(x = gen))
+
 
 
 
@@ -1374,33 +1420,94 @@ compoplot(dapc1,
 
 
 ####PCoA####
+
+#ADULTS
+
 gen_dists_MLLs <- as.matrix(bruvo.dist(MLL_genind, replen =  replen_real))
 
-
 # Perform PCoA and extract eigenvalues
-pcoa_results <- cmdscale(gen_dists_MLLs, eig = TRUE, k = 2)
+pcoa_results_adults <- cmdscale(gen_dists_MLLs, eig = TRUE, k = 2)
 
 # Calculate the variance explained for PC1 and PC2
-variance_explained <- pcoa_results$eig / sum(pcoa_results$eig) * 100
+variance_explained <- pcoa_results_adults$eig / sum(pcoa_results_adults$eig) * 100
 pc1_var <- round(variance_explained[1], 1)
 pc2_var <- round(variance_explained[2], 1)
 
-
 # Extract PCoA coordinates
-pcoa_data <- as.data.frame(pcoa_results$points)
-colnames(pcoa_data) <- c("PC1", "PC2")
+pcoa_data_adults <- as.data.frame(pcoa_results_adults$points)
+colnames(pcoa_data_adults) <- c("PC1", "PC2")
 
 # Add population or grouping information (replace 'your_groups' with your actual metadata)
-pcoa_data$Group <- MLL_genind@pop 
-pcoa_data$Region <- MLL_genind@strata$region 
+pcoa_data_adults$Group <- MLL_genind@pop 
+pcoa_data_adults$Region <- MLL_genind@strata$region 
 
-
-ggplot(pcoa_data, aes(x = PC1, y = PC2, color = Region)) +
+#PCOA of Adult Microsatellite Data
+PCoA1 <- ggplot(pcoa_data_adults, aes(x = PC1, y = PC2, color = Region)) +
   geom_point(size = 4) +
   theme_minimal() +
+  coord_cartesian(xlim = c(-0.4, 0.4), ylim = c(-0.4, 0.4))+
+  scale_color_manual(values = c("#F8766D", "#7CAE00", "#00BFC4"))+
   labs(
-    title = "PCoA of Microsatellite Data",
+    title = "PCoA of Adult Microsatellite Data",
     x = paste0("PC1 (", pc1_var, "%)"),
     y = paste0("PC2 (", pc2_var, "%)")
   ) +
   stat_ellipse(aes(fill = Region), geom = "polygon", alpha = 0.2, show.legend = FALSE)
+
+PCoA1
+
+
+#2022 PCoA
+gen_dists_2022 <- as.matrix(bruvo.dist(genind_data_2022, replen = replen_real))
+
+# Perform PCoA and extract eigenvalues
+pcoa_results_2022 <- cmdscale(gen_dists_2022, eig = TRUE, k = 2)
+
+# Calculate the variance explained for PC1 and PC2
+variance_explained_2022 <- pcoa_results_2022$eig / sum(pcoa_results_2022$eig) * 100
+pc1_var_2022 <- round(variance_explained_2022[1], 1)
+pc2_var_2022 <- round(variance_explained_2022[2], 1)
+
+# Extract PCoA coordinates
+pcoa_data_2022 <- as.data.frame(pcoa_results_2022$points)
+colnames(pcoa_data_2022) <- c("PC1", "PC2")
+
+# Add population or grouping information (replace 'your_groups' with your actual metadata)
+pcoa_data_2022$Group <- genind_data_2022@pop
+pcoa_data_2022$Region <- "2022"
+#pcoa_data_2022$Region <- genind_data_2022@strata$region
+
+#PCOA of 2022 Microsatellite Data
+ggplot(pcoa_data_2022, aes(x = PC1, y = PC2, color = Region)) +
+  geom_point(size = 4) +
+  theme_minimal() +
+  #coord_cartesian(xlim = c(-0.4, 0.4), ylim = c(-0.4, 0.4))+
+  labs(
+    title = "PCoA of 2022 Microsatellite Data",
+    x = paste0("PC1 (", pc1_var, "%)"),
+    y = paste0("PC2 (", pc2_var, "%)")
+  ) +
+  stat_ellipse(aes(fill = Region), geom = "polygon", alpha = 0.2, show.legend = FALSE)
+
+
+#PCOA of Adult + 2022 Microsatellite Data
+
+pcoa_data_adults_2022 <- pcoa_data_adults%>%
+  rbind(pcoa_data_2022)
+
+pcoa_data_adults_2022$Region <- factor(pcoa_data_adults_2022$Region, levels = c("North", "East", "West", "2022"))
+  
+PCoA2 <- ggplot(pcoa_data_adults_2022, aes(x = PC1, y = PC2, color = Region)) +
+  geom_point(size = 4) +
+  theme_minimal() +
+  coord_cartesian(xlim = c(-0.4, 0.4), ylim = c(-0.4, 0.4))+
+  #scale_color_manual(values = c("#C77CFF", "#F8766D", "#7CAE00", "#00BFC4"))+
+  labs(
+    title = "PCoA of Adult + 2022 Microsatellite Data",
+    x = paste0("PC1 (", pc1_var, "%)"),
+    y = paste0("PC2 (", pc2_var, "%)")
+  ) +
+  stat_ellipse(aes(fill = Region), geom = "polygon", alpha = 0.2, show.legend = FALSE)
+PCoA2
+
+PCoA1 + PCoA2
