@@ -10,6 +10,7 @@ library(ggrepel)
 library(magrittr)
 library(PopGenReport)
 library(patchwork)
+library(ggalluvial)
 
 
 #set to wherever you want your outputs from these analyses to go
@@ -19,7 +20,6 @@ setwd("~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis")
 `%notin%` <- Negate(`%in%`)
 
 ####Loading in the raw scores from geneious####
-
 path_to_code_outputs = "~/Documents/GitHub/QUBR_exsitu_gen_diversity/Genetic Analysis/data/inputs"
 
 # the location on my computer where outputs are aggregated 
@@ -146,6 +146,8 @@ all_data_cleaned %>%
   theme_minimal()
 
 
+
+
 ####Cleaning data for futher analyses####
 
 # Write the (mostly) cleaned data to the working directory 
@@ -171,7 +173,7 @@ data_tmp <- all_data_cleaned %>%
   mutate(need_recheck = if_any(
     .cols = -c(Name, DP_num, num_loci_polyploid), 
     .fns = ~ str_detect(., "nbinned")))
-#WRITE CSV FOR ASH
+
 
 # Make a df w/ only the info about inds which are putative polyploids
 putative_polyploids <- data_tmp %>%
@@ -211,7 +213,6 @@ need_recheck_list <- data_tmp %>%
 #This is currently at 0
 # Write the recheck list data to working dir 
 #write_csv(need_recheck_list, paste0(path_to_code_outputs, "/recheck_list.csv"))
-#MAKE CSV FOR ASH
 
 
 # Make a df for further analyses w/ the polyploids and inds that need to be reamped removed
@@ -286,12 +287,13 @@ final_clean_dedup_data <- final_clean_data %>%
 
 #how many mismatches occurred in the dup_mismatches?
 #did we score the orig and the dup differently?
-false_dup_mismatches <-
-  dup_mismatches%>%
+false_dup_mismatches <-dup_mismatches%>%
   select(1:(last_col() - 2))%>% #removes polyploid & reamp columns
   filter_at(vars(2:23), any_vars(.=='FALSE'))#checks all columns except for SH-Q ID for 'FALSE'
 #ans: 12 individuals (SH-Q3303, SH-Q3447, SH-Q3490, SH-Q3548, SH-Q4039, SH-Q4072, SH-Q4075, SH-Q4091, SH-Q4164, SH-Q4490, SH-Q4515, SH-Q4983) 
 #ans: across 4 loci(07_187 - 1,	07_187 - 2, 02_829 - 1,	02_829 - 2,	03_101 - 1,	03_101 - 2, 02_754 - 1,	02_754 - 2)
+
+
 
 
 ####Preping a df that connects all info I have about every ind together####
@@ -475,11 +477,7 @@ nrow(OP_putative_polyploids) #n=2
 exploring_putative_polyploids <- bind_rows(seedling_putative_polyploids, adult_putative_polyploids, OP_putative_polyploids)%>%
   mutate(polyploid_confidence = "multi")%>%
   rename(gen = "generation")
-#SH-Q5618 is getting dropped: why?
-#adult, QUBR_LC_320, TCB-04137
-#does not exist in Ash_adults, RaMP_adults
-#does exist in putative_polyploids
-#It is present in Ash's raw data files for MP1 & MP4
+#SH-Q5618 (QUBR_LC_320, TCB-04137) gets dropped
 #This is a duplicate for LC_133 that we collected from twice
 
 #We are less confident that individuals with only one polyploid loci are actually polyploids
@@ -504,11 +502,12 @@ exploring_iffy_putative_polyploids <- bind_rows(iffy_seedling_putative_polyploid
 #I think its just because of the _B
 #This is correct! We identified it once as polyploid and once as not, so the _B was lost
 
+
 #Looking only at our subset of individuals that are putative polyploids:
 visualizing_putative_polyploids <- bind_rows(exploring_putative_polyploids, exploring_iffy_putative_polyploids)
 
 #how confident are we in identifying the NUMBER of polyploids in each generation?
-visualizing_putative_polyploids%>%
+polyploid_num <- visualizing_putative_polyploids%>%
   ggplot(aes(x=gen, fill=polyploid_confidence))+
   geom_bar() +
   scale_x_discrete(labels = c("2022" = "2022 (n=43)", "adult" = "adult (n=63)", "OP" = "OP (n=6)"))+
@@ -518,7 +517,7 @@ visualizing_putative_polyploids%>%
   theme_classic()
 
 #how confident are we in identifying the PROPORTION of polyploids in each generation?
-visualizing_putative_polyploids%>%
+polyploid_proportion <- visualizing_putative_polyploids%>%
   ggplot()+
   geom_bar(aes(x=gen, fill=polyploid_confidence), position = "fill") +
   scale_x_discrete(labels = c("2022" = "2022 (n=43)", "adult" = "adult (n=63)", "OP" = "OP (n=6)"))+
@@ -526,6 +525,8 @@ visualizing_putative_polyploids%>%
   labs(fill = "confidence") +
   ggtitle("Proportion of polyploids per generation") +
   theme_classic()
+
+polyploid_num + polyploid_proportion
 
 #Looking at our putative_polyploids in the context of all individuals tested:
 
@@ -555,7 +556,7 @@ prop_poly_all <- rbind(prop_poly_adults_all, prop_poly_outplanted, prop_poly_see
 prop_poly_all$polyploid_num <- factor(prop_poly_all$polyploid_num, levels = c("multi", "single", "none"))
 
 #how many individuals from each generation are polyploid?
-prop_poly_all%>%
+num_polyploid_all <- prop_poly_all%>%
   ggplot()+
   geom_bar(aes(x=gen, fill = polyploid_num))+
   scale_x_discrete(labels = c("2022" = "2022 (n=598)", "adult" = "adult (n=1023)", "OP" = "OP (n=126)"))+
@@ -563,13 +564,15 @@ prop_poly_all%>%
   theme_classic()
 
 #what proportion of individuals from each generation are polyploid?
-prop_poly_all%>%
+prop_polyploid_all <- prop_poly_all%>%
   ggplot()+
   geom_bar(aes(x=gen, fill = polyploid_num), position = "fill")+
   scale_x_discrete(labels = c("2022" = "2022 (n=598)", "adult" = "adult (n=1023)", "OP" = "OP (n=126)"))+
   #scale_y_continuous(labels = c("0%", "25%", "50", "75%", "100%"))+
   ggtitle("% of polyploid individuals per generation") +
   theme_classic()
+
+num_poly_all + prop_poly_all
 
 #same as above:
 #since there are so many non-polyploid individuals in this figure, it is more informative to look only at the top 10% 
@@ -581,6 +584,15 @@ prop_poly_all%>%
   scale_y_continuous(labels = c("90%", "92.5%", "95%", "97.5%", "100%"))+
   ggtitle("% of polyploid individuals per generation \n (top 10%)")+
   theme_classic()
+
+#Are any putative polyploids from 2022 or outplanted?
+#selects all ID names
+gen_TCB <- TCB_QUBR_IDs%>%
+  select("Tissue_ID", `Extraction Tube #`)%>%
+  rename(Name = `Extraction Tube #`)
+
+gen_putative_polyploids <- putative_polyploids%>%
+  left_join(gen_TCB, by = "Name")
 
 
 ####Turning data into genind object####
@@ -612,7 +624,7 @@ genind_data_2022 <- df2genind(geno_data_2022, sep = "_", ind.names = name_decode
 #setPop(genind_data_2022) <- ~locality #turn the locality strata into pop info
 range(genind_data_2022@loc.n.all) #get the range of number of alleles per locus 
 
-####Assigning MLL clones w/ genetic distance####
+####Assigning MLL (multi-locus lineage) clones w/ genetic distance####
 #Only for adults
 
 ## First set the repeat lengths for my loci
@@ -780,6 +792,7 @@ MLL_corr_basic_stats <- basic.stats(MLL_corr_data_hierfstat)
 # Get overall mean Fis
 MLL_mean_fis <- colMeans(MLL_basic_stats$Fis, na.rm = TRUE)
 MLL_mean_fis
+MLL_mean_fis <- as_tibble(as.list(MLL_mean_fis))
 
 
 # Get overall mean Fst
@@ -908,7 +921,6 @@ private_alleles_adults_2022 <- tibble(private_alleles(adults_and_2022, form = al
 allele_freq_adults_2022 <- as.tibble(makefreq(MLL_genpop_corr_data), rownames="pop")%>%
   select(c(pop, private_alleles_adults_2022$locus.allele))
 
-#TRUE/FALSE
 pop_count_adults_2022 <- allele_freq_adults_2022%>%
   mutate(across(-c(pop), ~ .x>0))%>%
   mutate(total=rowSums(across(-c(pop))))
@@ -924,7 +936,6 @@ private_alleles_adults_OP <- tibble(private_alleles(adults_and_OP, form = allele
 allele_freq_adults_OP <- as.tibble(makefreq(MLL_genpop_corr_data), rownames="pop")%>%
   select(c(pop, private_alleles_adults_OP$locus.allele))
 
-#TRUE/FALSE
 pop_count_adults_OP <- allele_freq_adults_OP%>%
   mutate(across(-c(pop), ~ .x>0))%>%
   mutate(total=rowSums(across(-c(pop))))%>%
@@ -945,7 +956,6 @@ allele_freq_2022 <- as.tibble(makefreq(genind2genpop(genind_data_2022)))%>%
   pivot_longer(cols = everything(), names_to = "locus.allele", values_to = "freq")%>%
   mutate(allele=str_extract(locus.allele, "(?<=\\.).+"))%>% #separates the locus and allele numbers into separate columns
   mutate(locus = str_extract(locus.allele, ".+(?=\\.)"))%>%
-#  mutate(present_in_OP=case_when(locus.allele %in% allele_freq_OP$locus.allele ~ T, .default = F))%>%
   mutate(pop="2022")%>%
   mutate(gen="2022")%>%
   mutate(allele_cat = case_when(freq == 0 ~ "not present",
@@ -953,8 +963,8 @@ allele_freq_2022 <- as.tibble(makefreq(genind2genpop(genind_data_2022)))%>%
                                 freq <0.1 & freq >0.01 ~ "low",
                                 freq >= 0.1 ~ "common"))%>%
   mutate(allele_cat = factor(allele_cat, levels = c("not present", "rare", "low", "common")))%>%
-  rename(freq_2022 = "freq")%>%
-  rename(allele_cat_2022 = "allele_cat")
+  rename(allele_cat_2022 = allele_cat)%>%
+  rename(freq_2022 = "freq")
 
 
 allele_freq_OP <- as.tibble(makefreq(genind2genpop(genind_data_OP)))%>%
@@ -972,7 +982,6 @@ allele_freq_OP <- as.tibble(makefreq(genind2genpop(genind_data_OP)))%>%
   rename(allele_cat_OP = "allele_cat")
 
 
-
 #which alleles in a given population are also in the progeny?
 allele_freq_adults <- as.tibble(makefreq(MLL_genpop_corr_data), rownames="pop")%>%
   pivot_longer(cols = -c("pop"), names_to = "locus.allele", values_to = "freq")%>%
@@ -988,7 +997,6 @@ allele_freq_adults <- as.tibble(makefreq(MLL_genpop_corr_data), rownames="pop")%
   #mutate(present_in_2022=case_when(locus.allele %in% allele_freq_2022$locus.allele ~ T, .default = F))%>%
   #mutate(present_in_OP=case_when(locus.allele %in% allele_freq_OP$locus.allele ~ T, .default = F))
   
-#send Ash genind using save() for all pops
 #saveRDS(genind_data_2022, "genind_data_2022")
 #saveRDS(genind_data_adults, "genind_data_adults")
 #saveRDS(MLL_genind, "MLL_genind")
@@ -997,64 +1005,46 @@ allele_freq_adults <- as.tibble(makefreq(MLL_genpop_corr_data), rownames="pop")%
 #combines all alleles back into one df
 allele_freq_all <- bind_rows(allele_freq_adults, allele_freq_2022, allele_freq_OP)
   #mutate(allele_cat = factor(pop, levels = c("EC", "LB", "SD", "SDo", "LM", "LC", "2022", "OP")))
+allele_freq_all_nopop <- bind_rows(allele_freq_adults, allele_freq_2022, allele_freq_OP)%>%
+  rename(freq_adult = "freq")%>%
+  rename(allele_cat_adult = "allele_cat")%>%
+  mutate(freq_all = coalesce(freq_adult, freq_2022, freq_OP))%>%
+  mutate(allele_cat_all = coalesce(allele_cat_adult, allele_cat_2022, allele_cat_OP))%>%
+  select(!c(allele_cat_adult, allele_cat_2022, allele_cat_OP, freq_adult, freq_2022, freq_OP, pop))
 
-iffy_alleles <- exploring_iffy_putative_polyploids%>%
-  select(Name, gen)%>%
-  left_join(all_data, by = "Name")
+#wide format of OP and 2022 allele freqs
+allele_freq_OP_wide <- as.tibble(makefreq(genind2genpop(genind_data_OP)))%>%
+  mutate(pop="OP")
+allele_freq_2022_wide <- as.tibble(makefreq(genind2genpop(genind_data_2022)))%>%
+  mutate(pop="2022")
 
-#write_csv(iffy_alleles, "iffy_allele_table.csv")
-
-#what proportion of individuals from each generation are polyploid?
-prop_poly_all%>%
-  ggplot()+
-  geom_bar(aes(x=gen, fill = polyploid_num), position = "fill")+
-  scale_x_discrete(labels = c("2022" = "2022 (n=598)", "adult" = "adult (n=1023)", "OP" = "OP (n=126)"))+
-  #scale_y_continuous(labels = c("0%", "25%", "50", "75%", "100%"))+
-  ggtitle("% of polyploid individuals per generation") +
-  theme_classic()
+#making a genpop for adults with no population designations
+MLL_genind_data <- genclone2genind(MLL_genclone_data)
+strata(MLL_genind_data) <- data.frame(pop=rep("adult", length.out=nInd(MLL_genind_data)))
+setPop(MLL_genind_data) <- ~pop
+MLL_genpop_data_nopop<- genind2genpop(MLL_genind_data)
 
 
+allele_freq_adults_nopop_wide <- as.tibble(makefreq(MLL_genpop_data_nopop), rownames="pop")
+  
+#creating a long and wide version of all allele freqs because I'm not sure which I will need in the future
+allele_freq_all_wide <- allele_freq_adults_nopop_wide%>%
+  bind_rows(allele_freq_2022_wide)%>%
+  bind_rows(allele_freq_OP_wide)
 
-allele_stats_adult$allele_cat <- factor(allele_stats_adult$allele_cat, levels = c("common", "rare", "low", "not present"))
-#c("not present", "rare", "low", "common"))
-#c("common", "rare", "low", "not present"))
+allele_freq_all_long <- allele_freq_all_wide%>%
+  pivot_longer(cols = -c("pop"), names_to = "locus.allele", values_to = "freq")%>%
+  rename(gen = "pop")%>%
+  mutate(gen = factor(gen, levels = c("adult", "2022", "OP")))%>%
+  mutate(freq = case_when(is.na(freq) ~ 0, .default = freq))%>%
+  mutate(allele_cat = case_when(freq == 0 ~ "not present",
+                                freq <=0.01 ~ "rare",
+                                freq <0.1 & freq >0.01 ~ "low",
+                                freq >= 0.1 ~ "common"))%>%
+  mutate(allele_cat = factor(allele_cat, levels = c("common", "low", "rare", "not present")))
+  
 
-#allele_cat frequencies for each adult population
-P1 <- allele_freq_adults %>%
-  ggplot()+
-  geom_bar(aes(x = pop, fill = fct_rev(allele_cat)))+
-  scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
-  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4", "#C77CFF"))+
-  labs(x = "population", y = "# of alleles", fill = "allele frequency")+
-  ggtitle("allele category frequencies in adult populations")+
-  #geom_text(
-    #data = allele_stats_adult,
-    #aes(x = pop, y = count, label = count),
-    #position = position_stack(vjust = 0.75))+
-  theme_classic()
-P1
 
-#allele_cat frequencies for OP
-P2 <- allele_freq_OP%>%
-  ggplot()+
-  geom_bar(aes(x = gen, fill = fct_rev(allele_cat)))+
-  scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
-  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4"))+
-  labs(x = "generation", y = "# of alleles", fill = "allele frequency")+
-  ggtitle("allele category frequencies in OP")+
-  theme_classic()
-P2
-
-#allele_cat frequencies for 2022 seedlings
-P3 <- allele_freq_2022%>%
-  ggplot()+
-  geom_bar(aes(x = gen, fill = fct_rev(allele_cat)))+
-  scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
-  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4"))+
-  labs(x = "generation", fill = "allele frequency")+
-  ggtitle("allele category frequencies in 2022")+
-  theme_classic()
-P3
 
 #Calculating summary stats:
 
@@ -1080,6 +1070,7 @@ adult_allele_notpresent_stats <- allele_freq_adults%>%
   group_by(pop)%>%
   summarise(count=sum(allele_cat == "not present", na.rm = TRUE))%>%
   rename("not present" = count)
+
 #rejoining each allele_cat to show all counts for all adult populations
 #long format, preferred for visualization
 allele_stats_adult <- adult_allele_rare_stats%>%
@@ -1098,16 +1089,18 @@ allele_stats_adult_sum <- allele_stats_adult%>%
 #allele_cats for 2022
 allele_stats_2022 <- allele_freq_all%>%
   filter(gen == "2022")%>%
-  group_by(allele_cat)%>%
+  group_by(allele_cat_2022)%>%
   summarise(total_rows = n())%>%
-  rename(`2022` = "total_rows")
+  rename(`2022` = "total_rows")%>%
+  rename(allele_cat = "allele_cat_2022")
 
 #allele_cats for OP
 allele_stats_OP <- allele_freq_all%>%
   filter(gen == "OP")%>%
-  group_by(allele_cat)%>%
+  group_by(allele_cat_OP)%>%
   summarise(total_rows = n())%>%
-  rename(OP = "total_rows")
+  rename(OP = "total_rows")%>%
+  rename(allele_cat = "allele_cat_OP")
 
 #allele_cat stats for all generations
 allele_stats_all <- allele_stats_adult_sum%>%
@@ -1125,30 +1118,75 @@ allele_stats_all <- allele_stats_adult_sum%>%
 
 allele_freq_all$pop <- factor(allele_freq_all$pop, levels = c("adult", "2022", "OP"))
 
+allele_stats_all$allele_cat <- factor(allele_stats_all$allele_cat, levels = c("common", "rare", "low", "not present"))
+#c("not present", "rare", "low", "common"))
+#c("common", "rare", "low", "not present"))
+
 sum(allele_stats_adult_sum$adult)
 
-#allele_cat frequencies for all generations
-P4 <- allele_freq_all%>%
+
+
+
+
+
+#allele_cat frequencies for each adult population
+P1 <- allele_freq_adults %>%
   ggplot()+
-  geom_bar(aes(x = gen, fill = fct_rev(allele_cat)), position = "fill")+
+  geom_bar(aes(x = pop, fill = fct_rev(allele_cat)))+
+  scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
   scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4", "#C77CFF"))+
+  labs(x = "population", y = "# of alleles", fill = "allele frequency")+
+  ggtitle("allele category frequencies in adult populations")+
+  #geom_text(
+  #data = allele_stats_adult,
+  #aes(x = pop, y = count, label = count),
+  #position = position_stack(vjust = 0.75))+
+  theme_classic()
+P1
+
+
+#I think this can be deleted, its not what we needed
+#allele_cat frequencies for OP
+P2 <- allele_freq_OP%>%
+  ggplot()+
+  geom_bar(aes(x = gen, fill = fct_rev(allele_cat_OP)))+
+  scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
+  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4"))+
+  labs(x = "generation", y = "# of alleles", fill = "allele frequency")+
+  ggtitle("allele category frequencies in OP")+
+  theme_classic()
+P2
+
+#I think this can be deleted, its not what we needed
+#allele_cat frequencies for 2022 seedlings
+P3 <- allele_freq_2022%>%
+  ggplot()+
+  geom_bar(aes(x = gen, fill = fct_rev(allele_cat_2022)))+
+  scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
+  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4"))+
   labs(x = "generation", fill = "allele frequency")+
+  ggtitle("allele category frequencies in 2022")+
+  theme_classic()
+P3
+
+#allele_cat frequencies for all generations
+allele_freq_all_nopop$allele_cat_all <- factor(allele_freq_all_nopop$allele_cat_all, levels = c("common", "low", "rare", "not present"))
+allele_freq_all_nopop$gen <- factor(allele_freq_all_nopop$gen, levels = c("adult", "2022", "OP"))
+
+P4 <- allele_freq_all_nopop%>%
+  ggplot()+
+  geom_bar(aes(x = gen, fill = fct_rev(allele_cat_all)), position = "fill")+
+  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4", "#C77CFF"))+
+  labs(x = "generation", y = "proportion", fill = "allele frequency")+
   ggtitle("proportion of allele category frequencies \n across generations")+
-  geom_text(
-    data = allele_stats_all,
-    aes(x = pop, y = proportion, label = percent),
-    position = position_stack(vjust = 0.5))+
+  #geom_text(
+   # data = allele_stats_all,
+    #aes(x = pop, y = proportion, label = percent),
+    #position = position_stack(vjust = 0.5))+
   scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by=0.2))+
   theme_classic()
 P4
 
-
-#combining 3 different tables to show all generations side by side
-#(P1 + P3 + P2)+
-#  plot_annotation(title = "allele frequency by generation")+
-#  plot_annotation(tag_levels = list(c('adults', 'outplanted', 'seedlings')))
-#^this will only work if I also give OP and 2022 dfs pop columns that duplicate their gen
-#its fine because I didn't really like how it was spacing the figures together
 
 
 #stacked bar graph gen#stacked bar graph showing each allele categories (Counts of true/false)
@@ -1170,7 +1208,7 @@ allele_freq_allgen <- allele_freq_adults%>%
   mutate(across(starts_with("allele_"), ~factor(.x, levels = c("common", "low", "rare", "not present"))))
   
 #OP
-ACFA <- allele_freq_allgen %>%
+ACFOP <- allele_freq_allgen %>%
   ggplot()+
   geom_bar(aes(x = allele_cat_adult, fill = allele_cat_OP))+
   #scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
@@ -1179,6 +1217,7 @@ ACFA <- allele_freq_allgen %>%
   ggtitle("allele category frequencies in adult populations")+
   theme_classic()+
   facet_wrap(~pop)
+ACFOP
 
 #2022
 ACF2022 <- allele_freq_allgen %>%
@@ -1190,17 +1229,11 @@ ACF2022 <- allele_freq_allgen %>%
   ggtitle("allele category frequencies in adult populations")+
   theme_classic()+
   facet_wrap(~pop)
+ACF2022
 
-ACFA + ACF2022
-
-MLL_genind_data <- genclone2genind(MLL_genclone_data)
-
-strata(MLL_genind_data) <- data.frame(pop=rep("adult", length.out=nInd(MLL_genind_data)))
-
-setPop(MLL_genind_data) <- ~pop
-
-MLL_genpop_data_nopop<- genind2genpop(MLL_genind_data)
-
+#side by side display of OP and 2022
+ACF2022 /
+  ACFOP
 
 numOP <- nInd(genind_data_OP)
 num2022 <- nInd(genind_data_2022)
@@ -1225,6 +1258,7 @@ allele_freq_adults_nopop <- as.tibble(makefreq(MLL_genpop_data_nopop))%>%
   mutate(allele_count_OP = as.numeric(freq_OP)*2*numOP)%>%
   mutate(allele_count_2022 = as.numeric(freq_2022)*2*num2022)
 
+
 #comparable to Table 1 in Schumacher paper
 #OP allele frequencies
 perc_alleles_OP <- allele_freq_adults_nopop%>%
@@ -1242,7 +1276,8 @@ perc_alleles_OP <- allele_freq_adults_nopop%>%
          grt5 = sum(grt5)/nrow(allele_freq_adults_nopop)*100,
          grt10 = sum(grt10)/nrow(allele_freq_adults_nopop)*100)%>%
   distinct(allele_cat_adult, .keep_all = TRUE)%>%
-  select(c(allele_cat_adult, grt1, grt2, grt5, grt10))
+  select(c(allele_cat_adult, grt1, grt2, grt5, grt10))%>%
+  rename(allele_cat_OP = "allele_cat_adult")
 
 #unclear whether these frequencies make sense for the common alleles?
 
@@ -1262,40 +1297,158 @@ perc_alleles_2022 <- allele_freq_adults_nopop%>%
          grt5 = sum(grt5)/nrow(allele_freq_adults_nopop)*100,
          grt10 = sum(grt10)/nrow(allele_freq_adults_nopop)*100)%>%
   distinct(allele_cat_adult, .keep_all = TRUE)%>%
-  select(c(allele_cat_adult, grt1, grt2, grt5, grt10))
+  select(c(allele_cat_adult, grt1, grt2, grt5, grt10))%>%
+  rename(allele_cat_2022 = "allele_cat_adult")
+
 
 #GLOBAL
+#What category did adult alleles become in the OP generation?
+
 allele_freq_adults_nopop %>%
   ggplot()+
   geom_bar(aes(x = allele_cat_adult, fill = allele_cat_OP), position = "fill")+
   #scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
   scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4", "#C77CFF"))+
-  labs(x = "adult allele frequency", y = "proportion of alleles", fill = "OP allele frequency")+
+  labs(x = "adult allele frequency", y = "proportion of alleles", fill = "OP allele frequency") +
+  scale_x_discrete(labels = c("common" = "common \n (n=33)", "low" = "low \n (n=101)", "rare" = "rare \n (n=64)"))+
   ggtitle("allele category frequencies in adult populations")+
   theme_classic()
 
-#NEW FIGURES
-#2022
-allele_freq_allgen %>%
-  ggplot()+
-  geom_bar(aes(x = allele_cat_adult, fill = allele_cat_2022))+
-  #scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by=50))+
-  scale_fill_manual(values = c("#F8766D", "#7CAE00", "#00BFC4", "#C77CFF"))+
-  labs(x = "adult allele frequency", y = "# of alleles", fill = "2022 allele frequency")+
-  ggtitle("allele category frequencies in adult populations")+
-  theme_classic()+
-  facet_wrap(~pop)
+allele_freq_adults_nopop%>%
+  filter(allele_cat_adult == "rare")%>%
+  count(allele_cat_OP)
 
-allele_freq_allgen%>%
-  ggplot()+
-  geom_bar(aes(x = gen))
+####Tanglegram####
+#long df of adults, 2022s, and OPs
+#include locus.allele, generation, frequency, allele_cat, population
+
+t <- allele_freq_2022%>%
+  select(locus.allele, pop, gen, freq_2022, allele_cat_2022)%>%
+  rename(freq = "freq_2022")%>%
+  rename(allele_cat = "allele_cat_2022")
+
+t2 <- allele_freq_OP%>%
+  select(locus.allele, pop, gen, freq_OP, allele_cat_OP)%>%
+  rename(freq = "freq_OP")%>%
+  rename(allele_cat = "allele_cat_OP")
+
+allele_freq_tangle <- allele_freq_adults%>%
+  select(locus.allele, pop, gen, freq, allele_cat)%>%
+  rbind(t)%>%
+  rbind(t2)%>%
+  mutate(gen = factor(gen, levels = c("adult", "2022", "OP")))
+
+tangle_cat <- allele_freq_tangle%>%
+  #group_by(locus.allele)%>%
+  ggplot(data = ., aes(x = gen, y = allele_cat, alpha = freq)) +
+  geom_point() +
+  stat_summary(fun = mean, geom = "line", aes(group = locus.allele)) +
+  ggtitle("changes in allele frequency category") +
+  theme_classic()
+
+tangle_freq <- allele_freq_tangle%>%
+  #group_by(locus.allele)%>%
+  ggplot(data = ., aes(x = gen, y = freq, alpha = freq)) +
+  geom_point() +
+  stat_summary(fun = mean, geom = "line", aes(group = locus.allele)) +
+  geom_hline(yintercept = c(0, 0.01, 0.1), color = 'sienna2')+
+  coord_cartesian(ylim = c(0, 1))+
+  ggtitle("changes in allele frequency") +
+  theme_classic()
+
+tangle_cat/
+  tangle_freq
+
+#Ash's tanglegram example
+#probs %>%
+#  mutate(sampled_region = case_when(sampled == "Y" ~ region, 
+#                                    .default = NA)) %>%
+#  ggplot(data = ., aes(x = time, y = relative_prob, color = sampled_region, alpha = sampled)) +
+#  geom_point() +
+#  stat_summary(fun = mean, geom = "line", aes(group = id)) +
+#  scale_color_manual(values = c("darkred", "rosybrown", "sienna2"), na.value = "grey60") +
+#  scale_alpha_manual(values = c(.3, 1)) +
+#  ylab("Relative prob in AICc ESM") +
+#  xlab("") +
+#  guides(color=guide_legend(title="region")) +
+#  theme_classic() +
+#  facet_grid(~region)
 
 
 
+####Alluvial figure####
+#calculating summary stats for alluvial figure
+summary_stats_alluvium_notpresent <- allele_freq_all_long%>%
+  group_by(gen)%>%
+  summarise(count=sum(allele_cat == "not present", na.rm = TRUE))%>%
+  rename("not present" = count)
+summary_stats_alluvium_rare <- allele_freq_all_long%>%
+  group_by(gen)%>%
+  summarise(count=sum(allele_cat == "rare", na.rm = TRUE))%>%
+  rename("rare" = count)
+summary_stats_alluvium_low <- allele_freq_all_long%>%
+  group_by(gen)%>%
+  summarise(count=sum(allele_cat == "low", na.rm = TRUE))%>%
+  rename("low" = count)
+summary_stats_alluvium_common <- allele_freq_all_long%>%
+  group_by(gen)%>%
+  summarise(count=sum(allele_cat == "common", na.rm = TRUE))%>%
+  rename("common" = count)
 
-####Figures####
+summary_stats_alluvium <- summary_stats_alluvium_notpresent%>%
+  left_join(summary_stats_alluvium_rare, by = "gen")%>%
+  left_join(summary_stats_alluvium_low, by = "gen")%>%
+  left_join(summary_stats_alluvium_common, by = "gen")
+print(summary_stats_alluvium)
+
+summary_stats_alluvium_long <- summary_stats_alluvium %>%
+  pivot_longer(
+    cols = -gen,                # Pivot everything except the 'gen' column
+    names_to = "allele_cat",        # Temporary column for headers (low, common, rare)
+    values_to = "count"         # Column for the numeric values
+  )%>%
+  mutate(position = c(2, 35, 120, 180, 15, 55, 125, 180, 25, 65, 130, 180))%>%
+  mutate(proportion = (count / 200)*100)%>%
+  mutate(percent = paste0(proportion, "%"))
+print(summary_stats_alluvium_long)
+
+
+
+#alluvial figure
+#labels allele_cats with raw #s
+allele_freq_all_long%>%
+  mutate(allele_cat = as.factor(allele_cat), levels = "common", "low", "not present", "rare")%>%
+  ggplot(aes(x = gen, y = after_stat(count), stratum = as.factor(allele_cat), alluvium = locus.allele, fill = allele_cat)) +
+  # Draw the flows connecting generations 
+  geom_flow(stat = "alluvium") +
+  # Draw the vertical generation blocks
+  geom_stratum(width = 1/4, color = "grey20") +
+  # Add the labels inside the blocks
+  geom_text(data = summary_stats_alluvium_long, inherit.aes = FALSE, aes(x = gen, y = position, label = count), size = 3) +
+  labs(x = "Generation", y = "# of loci", fill = "allele frequency \n category") +
+  ggtitle("# of loci per allele frequency category") +
+  theme_minimal()
+
+
+#labels allele_cats with %s
+allele_freq_all_long%>%
+  mutate(allele_cat = as.factor(allele_cat), levels = "common", "low", "not present", "rare")%>%
+  ggplot(aes(x = gen, y = after_stat(count), stratum = as.factor(allele_cat), alluvium = locus.allele, fill = allele_cat)) +
+  # Draw the flows connecting generations 
+  geom_flow(stat = "alluvium") +
+  # Draw the vertical generation blocks
+  geom_stratum(width = 1/4, color = "grey20") +
+  # Add the labels inside the blocks
+  geom_text(data = summary_stats_alluvium_long, inherit.aes = FALSE, aes(x = gen, y = position, label = percent), size = 3) +
+  labs(x = "Generation", y = "# of loci", fill = "allele frequency \n category") +
+  ggtitle("# of loci per allele frequency category") +
+  theme_minimal()
+
+
+  
+####Figures for genetic poster####
 #standardizes table format for all
-bar_chart_2022 <- pop_count_adults_2022%>%
+allele_loss_2022 <- pop_count_adults_2022%>%
   select(c(pop, total))%>%
   rename("2022" = total)
 
@@ -1303,10 +1456,10 @@ swap_Na_by_pop <- Na_by_pop%>%
   slice(12)%>%
   pivot_longer(c("LM", "LC", "SD", "SDo", "LB", "EC"))
 
-bar_chart_all <- only_OP%>%
+allele_loss_all <- only_OP%>%
   select(c(pop, total))%>%
   rename("OP" = total)%>%
-  mutate("2022" = bar_chart_2022$`2022`)%>%
+  mutate("2022" = allele_loss_2022$`2022`)%>%
   mutate("Adult" = swap_Na_by_pop$value)%>%
   mutate("Sum_Adult" = Adult - (OP + `2022`))%>%
   select(-"Adult")%>%
@@ -1316,10 +1469,10 @@ bar_chart_all <- only_OP%>%
                             pop == "SDo" | pop == "LB" ~ "West"))
   
 
-bar_chart_all$name <- (ordered(bar_chart_all$name, levels=c("OP", "2022", "Sum_Adult")))
-bar_chart_all$pop <- (ordered(bar_chart_all$pop, levels=c("EC", "SD", "LC", "LM", "LB", "SDo")))
+allele_loss_all$name <- (ordered(allele_loss_all$name, levels=c("OP", "2022", "Sum_Adult")))
+allele_loss_all$pop <- (ordered(allele_loss_all$pop, levels=c("EC", "SD", "LC", "LM", "LB", "SDo")))
 
-bar_chart_all%>%
+allelic_retention_all <- allele_loss_all%>%
   ggplot+
   geom_bar(aes(x=pop, y=value, fill=name), stat="identity", position="stack")+
   xlab("population") +
@@ -1333,27 +1486,9 @@ bar_chart_all%>%
   # geom_text(label="7 (5.5%)", x="LM", y=124, size=3) +
   theme_classic()+
   facet_grid(~region, scales = "free_x")
+allelic_retention_all
 
-
-#Are any putative polyploids from 2022 or outplanted?
-#selects all ID names
-gen_TCB <- TCB_QUBR_IDs%>%
-  select("Tissue_ID", `Extraction Tube #`)%>%
-  rename(Name = `Extraction Tube #`)
-
-gen_putative_polyploids <- putative_polyploids%>%
-  left_join(gen_TCB, by = "Name")
-
- 
-
-# Source - https://stackoverflow.com/a/6645506
-# Posted by Ramnath, modified by community. See post 'Timeline' for change history
-# Retrieved 2026-07-10, License - CC BY-SA 3.0
-
-#ggplot(Data, aes(x = Year, y = Frequency, fill = Category, label = Frequency)) +
-  #geom_bar(stat = "identity") +
-  #geom_text(size = 3, position = position_stack(vjust = 0.5))
-
+#table on poster was made in Google Sheets
 
 
 ####Performing AMOVA on MLLs####
@@ -1422,27 +1557,22 @@ compoplot(dapc1,
 ####PCoA####
 
 #ADULTS
-
 gen_dists_MLLs <- as.matrix(bruvo.dist(MLL_genind, replen =  replen_real))
-
 # Perform PCoA and extract eigenvalues
 pcoa_results_adults <- cmdscale(gen_dists_MLLs, eig = TRUE, k = 2)
-
 # Calculate the variance explained for PC1 and PC2
 variance_explained <- pcoa_results_adults$eig / sum(pcoa_results_adults$eig) * 100
 pc1_var <- round(variance_explained[1], 1)
 pc2_var <- round(variance_explained[2], 1)
-
 # Extract PCoA coordinates
 pcoa_data_adults <- as.data.frame(pcoa_results_adults$points)
 colnames(pcoa_data_adults) <- c("PC1", "PC2")
-
 # Add population or grouping information (replace 'your_groups' with your actual metadata)
 pcoa_data_adults$Group <- MLL_genind@pop 
 pcoa_data_adults$Region <- MLL_genind@strata$region 
 
 #PCOA of Adult Microsatellite Data
-PCoA1 <- ggplot(pcoa_data_adults, aes(x = PC1, y = PC2, color = Region)) +
+pcoaAdult <- ggplot(pcoa_data_adults, aes(x = PC1, y = PC2, color = Region)) +
   geom_point(size = 4) +
   theme_minimal() +
   coord_cartesian(xlim = c(-0.4, 0.4), ylim = c(-0.4, 0.4))+
@@ -1453,32 +1583,26 @@ PCoA1 <- ggplot(pcoa_data_adults, aes(x = PC1, y = PC2, color = Region)) +
     y = paste0("PC2 (", pc2_var, "%)")
   ) +
   stat_ellipse(aes(fill = Region), geom = "polygon", alpha = 0.2, show.legend = FALSE)
+pcoaAdult
 
-PCoA1
 
-
-#2022 PCoA
+#2022
 gen_dists_2022 <- as.matrix(bruvo.dist(genind_data_2022, replen = replen_real))
-
 # Perform PCoA and extract eigenvalues
 pcoa_results_2022 <- cmdscale(gen_dists_2022, eig = TRUE, k = 2)
-
 # Calculate the variance explained for PC1 and PC2
 variance_explained_2022 <- pcoa_results_2022$eig / sum(pcoa_results_2022$eig) * 100
 pc1_var_2022 <- round(variance_explained_2022[1], 1)
 pc2_var_2022 <- round(variance_explained_2022[2], 1)
-
 # Extract PCoA coordinates
 pcoa_data_2022 <- as.data.frame(pcoa_results_2022$points)
 colnames(pcoa_data_2022) <- c("PC1", "PC2")
-
 # Add population or grouping information (replace 'your_groups' with your actual metadata)
 pcoa_data_2022$Group <- genind_data_2022@pop
 pcoa_data_2022$Region <- "2022"
-#pcoa_data_2022$Region <- genind_data_2022@strata$region
 
 #PCOA of 2022 Microsatellite Data
-ggplot(pcoa_data_2022, aes(x = PC1, y = PC2, color = Region)) +
+pcoa2022 <- ggplot(pcoa_data_2022, aes(x = PC1, y = PC2, color = Region)) +
   geom_point(size = 4) +
   theme_minimal() +
   #coord_cartesian(xlim = c(-0.4, 0.4), ylim = c(-0.4, 0.4))+
@@ -1488,26 +1612,62 @@ ggplot(pcoa_data_2022, aes(x = PC1, y = PC2, color = Region)) +
     y = paste0("PC2 (", pc2_var, "%)")
   ) +
   stat_ellipse(aes(fill = Region), geom = "polygon", alpha = 0.2, show.legend = FALSE)
+pcoa2022
 
-
-#PCOA of Adult + 2022 Microsatellite Data
-
+#Combined PCOA of Adult + 2022 Microsatellite Data
 pcoa_data_adults_2022 <- pcoa_data_adults%>%
   rbind(pcoa_data_2022)
-
 pcoa_data_adults_2022$Region <- factor(pcoa_data_adults_2022$Region, levels = c("North", "East", "West", "2022"))
-  
-PCoA2 <- ggplot(pcoa_data_adults_2022, aes(x = PC1, y = PC2, color = Region)) +
+
+pcoaAdult2022 <- ggplot(pcoa_data_adults_2022, aes(x = PC1, y = PC2, color = Region)) +
   geom_point(size = 4) +
   theme_minimal() +
   coord_cartesian(xlim = c(-0.4, 0.4), ylim = c(-0.4, 0.4))+
   #scale_color_manual(values = c("#C77CFF", "#F8766D", "#7CAE00", "#00BFC4"))+
+  scale_color_manual(values = c("#F8766D", "#7CAE00", "#00BFC4","darkgoldenrod1"))+
+  
   labs(
     title = "PCoA of Adult + 2022 Microsatellite Data",
     x = paste0("PC1 (", pc1_var, "%)"),
     y = paste0("PC2 (", pc2_var, "%)")
   ) +
   stat_ellipse(aes(fill = Region), geom = "polygon", alpha = 0.2, show.legend = FALSE)
-PCoA2
+pcoaAdult2022
 
-PCoA1 + PCoA2
+pcoaAdult + pcoaAdult2022
+
+#OP PCoA
+gen_dists_OP <- as.matrix(bruvo.dist(genind_data_OP, replen = replen_real))
+# Perform PCoA and extract eigenvalues
+pcoa_results_OP <- cmdscale(gen_dists_OP, eig = TRUE, k = 2)
+# Calculate the variance explained for PC1 and PC2
+variance_explained_OP <- pcoa_results_OP$eig / sum(pcoa_results_OP$eig) * 100
+pc1_var_OP <- round(variance_explained_OP[1], 1)
+pc2_var_OP <- round(variance_explained_OP[2], 1)
+# Extract PCoA coordinates
+pcoa_data_OP <- as.data.frame(pcoa_results_OP$points)
+colnames(pcoa_data_OP) <- c("PC1", "PC2")
+# Add population or grouping information (replace 'your_groups' with your actual metadata)
+pcoa_data_OP$Group <- genind_data_OP@pop
+pcoa_data_OP$Region <- "OP"
+#pcoa_data_2022$Region <- genind_data_2022@strata$region
+
+pcoa_data_adults_OP <- pcoa_data_adults%>%
+  rbind(pcoa_data_OP)
+
+
+pcoaAdultOP <- ggplot(pcoa_data_adults_OP, aes(x = PC1, y = PC2, color = Region)) +
+  geom_point(size = 4) +
+  theme_minimal() +
+  coord_cartesian(xlim = c(-0.4, 0.4), ylim = c(-0.4, 0.4))+
+  scale_color_manual(values = c("#F8766D", "#7CAE00", "#00BFC4", "coral4"))+
+  labs(
+    title = "PCoA of Adult + OP Microsatellite Data",
+    x = paste0("PC1 (", pc1_var, "%)"),
+    y = paste0("PC2 (", pc2_var, "%)")
+  ) +
+  stat_ellipse(aes(fill = Region), geom = "polygon", alpha = 0.2, show.legend = FALSE)
+
+#side by side view of adults, adults with 2022, and adults with OP
+pcoaAdult + pcoaAdult2022 + pcoaAdultOP
+
