@@ -11,6 +11,7 @@ library(magrittr)
 library(PopGenReport)
 library(patchwork)
 library(ggalluvial)
+library(ggsankeyfier)
 
 
 #set to wherever you want your outputs from these analyses to go
@@ -1002,6 +1003,8 @@ only_OP <- allele_freq_only_OP%>%
   mutate(total=rowSums(across(-c(pop))))%>%
   cbind()
 
+
+#separates locus and allele number in column titles and defines allele_cat categories
 allele_freq_2022 <- as.tibble(makefreq(genind2genpop(genind_data_2022)))%>%
   pivot_longer(cols = everything(), names_to = "locus.allele", values_to = "freq")%>%
   mutate(allele=str_extract(locus.allele, "(?<=\\.).+"))%>% #separates the locus and allele numbers into separate columns
@@ -1046,7 +1049,30 @@ allele_freq_adults <- as.tibble(makefreq(MLL_genpop_corr_data), rownames="pop")%
 #rare, common, etc. based on Schumacher paper#rare, common, etc.Name based on Schumacher paper
   #mutate(present_in_2022=case_when(locus.allele %in% allele_freq_2022$locus.allele ~ T, .default = F))%>%
   #mutate(present_in_OP=case_when(locus.allele %in% allele_freq_OP$locus.allele ~ T, .default = F))
-  
+ 
+
+repool(MLL_corrected_data)
+MLL_corrected_data
+#
+allele_freq_adult <- as.tibble(makefreq(genind2genpop(MLL_corrected_data)))%>%
+  pivot_longer(cols = everything(), names_to = "locus.allele", values_to = "freq")%>%
+  mutate(allele=str_extract(locus.allele, "(?<=\\.).+"))%>% #separates the locus and allele numbers into separate columns
+  mutate(locus = str_extract(locus.allele, ".+(?=\\.)"))%>%
+  mutate(pop="OP")%>%
+  mutate(gen="OP")%>%
+  mutate(allele_cat = case_when(freq == 0 ~ "not present",
+                                freq <=0.01 ~ "rare",
+                                freq <0.1 & freq >0.01 ~ "low",
+                                freq >= 0.1 ~ "common"))%>%
+  mutate(allele_cat = factor(allele_cat, levels = c("not present", "rare", "low", "common")))%>%
+  rename(freq_OP = "freq")%>%
+  rename(allele_cat_OP = "allele_cat")
+
+
+
+
+
+
 #saveRDS(genind_data_2022, "genind_data_2022")
 #saveRDS(genind_data_adults, "genind_data_adults")
 #saveRDS(MLL_genind, "MLL_genind")
@@ -1295,9 +1321,9 @@ allele_freq_adults_nopop <- as.tibble(makefreq(MLL_genpop_data_nopop))%>%
   left_join(., select(allele_freq_OP, freq_OP, allele_cat_OP, locus.allele), by = "locus.allele")%>%
   mutate(across(starts_with("freq"), ~str_replace_na(.x, replacement = "0")))%>%
   mutate(across(starts_with("allele_"), ~str_replace_na(.x, replacement = "not present")))%>%
-  mutate(across(starts_with("allele_"), ~factor(.x, levels = c("common", "low", "rare", "not present"))))%>%
-  mutate(allele_count_OP = as.numeric(freq_OP)*2*numOP)%>%
-  mutate(allele_count_2022 = as.numeric(freq_2022)*2*num2022)
+  mutate(across(starts_with("allele_"), ~factor(.x, levels = c("common", "low", "rare", "not present"))))
+  #mutate(allele_count_OP = as.numeric(freq_OP)*2*numOP)%>%
+  #mutate(allele_count_2022 = as.numeric(freq_2022)*2*num2022)
 
 
 #comparable to Table 1 in Schumacher paper
@@ -1492,6 +1518,31 @@ alluvial_freq_num /
 alluvial_freq_num + alluvial_freq_perc
   
 
+####Sankey figure####
+
+#summarises how many alleles travel between each allele_cat
+sankey_adult_to_2022 <- allele_freq_adults_nopop %>%
+  group_by(allele_cat_adult, allele_cat_2022)%>%
+  summarise(n=n())%>%
+  rename("allele_cat_to" = "allele_cat_2022")%>%
+  rename("allele_cat_from" = "allele_cat_adult")%>%
+  mutate(from = "adults")%>%
+  mutate(to = "2022")
+
+sankey_2022_to_OP <- allele_freq_adults_nopop %>%
+  group_by(allele_cat_2022, allele_cat_OP)%>%
+  summarise(n=n())%>%
+  rename("allele_cat_to" = "allele_cat_OP")%>%
+  rename("allele_cat_from" = "allele_cat_2022")%>%
+  mutate(from = "2022")%>%
+  mutate(to = "OP")
+
+sankey_full_prep <- sankey_adult_to_2022%>%
+  rbind(., sankey_2022_to_OP)%>%
+  pivot_stages_longer(stages_from = c("from", "to"), values_from = c("n"))
+
+
+?pivot_stages_longer
 
 
 ####Performing AMOVA on MLLs####
