@@ -198,7 +198,6 @@ need_reamp_list <- data_tmp %>%
   mutate(reamp_loci = paste(names(.)[str_detect(c_across(-c(Name)), "No peak")], collapse = ", ")) %>% #make a new col with the names of all the cols (loci) that have "No peak" values (aka need to be reamplified) 
   ungroup() %>% #stop performing operations rowwise
   select(Name, reamp_loci) #keep only the individual name and which loci need to be reamped 
-
 #Write the reamp list data to working dir 
 #write_csv(need_reamp_list, paste0(path_to_code_outputs, "/reamplification_list.csv"))
 
@@ -513,8 +512,10 @@ polyploid_num <- visualizing_putative_polyploids%>%
   scale_x_discrete(labels = c("2022" = "2022 (n=43)", "adult" = "adult (n=63)", "OP" = "OP (n=6)"))+
   ylab("number of individuals") +
   labs(fill = "confidence") +
-  ggtitle("Number of polyploids per generation") +
-  theme_classic()
+  ggtitle("# of polyploids per generation") +
+  theme_classic()+
+  guides(fill = "none")
+
 
 #how confident are we in identifying the PROPORTION of polyploids in each generation?
 polyploid_proportion <- visualizing_putative_polyploids%>%
@@ -561,7 +562,9 @@ num_polyploid_all <- prop_poly_all%>%
   geom_bar(aes(x=gen, fill = polyploid_num))+
   scale_x_discrete(labels = c("2022" = "2022 (n=598)", "adult" = "adult (n=1023)", "OP" = "OP (n=126)"))+
   ggtitle("# of polyploid individuals per generation") +
-  theme_classic()
+  theme_classic() +
+  guides(fill = "none")
+
 
 #what proportion of individuals from each generation are polyploid?
 prop_polyploid_all <- prop_poly_all%>%
@@ -572,7 +575,7 @@ prop_polyploid_all <- prop_poly_all%>%
   ggtitle("% of polyploid individuals per generation") +
   theme_classic()
 
-num_poly_all + prop_poly_all
+num_polyploid_all + prop_polyploid_all
 
 #same as above:
 #since there are so many non-polyploid individuals in this figure, it is more informative to look only at the top 10% 
@@ -900,7 +903,7 @@ private_alleles %>%
   group_by(population) %>%
   summarize(num_private_alleles = n(), num_inds = sum(count), mean_num_inds = mean(count))
 
-####Identifying alleles####
+####Identifying alleles (allelic retention)####
 
 #per generation
 alleles_2022 <- alleles(genind_data_2022)
@@ -941,6 +944,53 @@ pop_count_adults_OP <- allele_freq_adults_OP%>%
   mutate(total=rowSums(across(-c(pop))))%>%
   cbind()
 
+####Figures for genetic poster####
+#standardizes table format for all
+allele_loss_2022 <- pop_count_adults_2022%>%
+  select(c(pop, total))%>%
+  rename("2022" = total)
+
+swap_Na_by_pop <- Na_by_pop%>%
+  slice(12)%>%
+  pivot_longer(c("LM", "LC", "SD", "SDo", "LB", "EC"))
+
+allele_loss_all <- only_OP%>%
+  select(c(pop, total))%>%
+  rename("OP" = total)%>%
+  mutate("2022" = allele_loss_2022$`2022`)%>%
+  mutate("Adult" = swap_Na_by_pop$value)%>%
+  mutate("Sum_Adult" = Adult - (OP + `2022`))%>%
+  select(-"Adult")%>%
+  pivot_longer(c("2022", "OP", "Sum_Adult"))%>%
+  mutate(region = case_when(pop == "LM" | pop == "LC" ~ "North", 
+                            pop == "SD" | pop == "EC" ~ "East",
+                            pop == "SDo" | pop == "LB" ~ "West"))
+
+
+allele_loss_all$name <- (ordered(allele_loss_all$name, levels=c("OP", "2022", "Sum_Adult")))
+allele_loss_all$pop <- (ordered(allele_loss_all$pop, levels=c("EC", "SD", "LC", "LM", "LB", "SDo")))
+
+allelic_retention_all <- allele_loss_all%>%
+  ggplot+
+  geom_bar(aes(x=pop, y=value, fill=name), stat="identity", position="stack")+
+  xlab("population") +
+  ylab(" # of alleles") +
+  scale_x_discrete(labels = c("EC" = "EC \n (n=128)", "SD" = "SD \n (n=122)", "LC" = "LC \n (n=138)", "LM" = "LM \n (n=127)", "LB" = "LB \n (n=108)", "SDo" = "SDo \n (n=68)"))+
+  scale_y_continuous(limits = c(0, 150), breaks = seq(0, 150, by=20))+
+  scale_fill_manual(name = "Stages", 
+                    values=c('#a994b0', '#8fb8b5', '#f2e56e'),
+                    labels = c("Lost after outplanting", "Lost before outplanting", "Present at all stages")) +
+  
+  # geom_text(label="7 (5.5%)", x="LM", y=124, size=3) +
+  theme_classic()+
+  facet_grid(~region, scales = "free_x")
+allelic_retention_all
+
+#table on poster was made in Google Sheets
+
+
+
+####Allele frequency & distribution####
 #which alleles are present in the adults and 2022 seedlings, but not in OP?
 absent_only_from_OP <- private_alleles_adults_OP$locus.allele[which(private_alleles_adults_OP$locus.allele %notin% private_alleles_adults_2022$locus.allele)]
 
@@ -1126,9 +1176,6 @@ sum(allele_stats_adult_sum$adult)
 
 
 
-
-
-
 #allele_cat frequencies for each adult population
 P1 <- allele_freq_adults %>%
   ggplot()+
@@ -1188,15 +1235,9 @@ P4 <- allele_freq_all_nopop%>%
 P4
 
 
-
+####Stacked bar chart####
 #stacked bar graph gen#stacked bar graph showing each allele categories (Counts of true/false)
 #separate figures for 2022 and OP
-#x = population
-#facet by allele_freq_cat
-
-#the way I accomplished this has nothing to do with true/false- hope this is still right?
-
-#ANOVA?
 
 allele_freq_allgen <- allele_freq_adults%>%
   rename(freq_adult = "freq")%>%
@@ -1318,6 +1359,8 @@ allele_freq_adults_nopop%>%
   filter(allele_cat_adult == "rare")%>%
   count(allele_cat_OP)
 
+
+
 ####Tanglegram####
 #long df of adults, 2022s, and OPs
 #include locus.allele, generation, frequency, allele_cat, population
@@ -1416,7 +1459,7 @@ print(summary_stats_alluvium_long)
 
 #alluvial figure
 #labels allele_cats with raw #s
-allele_freq_all_long%>%
+alluvial_freq_num <- allele_freq_all_long%>%
   mutate(allele_cat = as.factor(allele_cat), levels = "common", "low", "not present", "rare")%>%
   ggplot(aes(x = gen, y = after_stat(count), stratum = as.factor(allele_cat), alluvium = locus.allele, fill = allele_cat)) +
   # Draw the flows connecting generations 
@@ -1429,9 +1472,8 @@ allele_freq_all_long%>%
   ggtitle("# of loci per allele frequency category") +
   theme_minimal()
 
-
 #labels allele_cats with %s
-allele_freq_all_long%>%
+alluvial_freq_perc <- allele_freq_all_long%>%
   mutate(allele_cat = as.factor(allele_cat), levels = "common", "low", "not present", "rare")%>%
   ggplot(aes(x = gen, y = after_stat(count), stratum = as.factor(allele_cat), alluvium = locus.allele, fill = allele_cat)) +
   # Draw the flows connecting generations 
@@ -1444,51 +1486,12 @@ allele_freq_all_long%>%
   ggtitle("# of loci per allele frequency category") +
   theme_minimal()
 
+alluvial_freq_num /
+  alluvial_freq_perc
 
-  
-####Figures for genetic poster####
-#standardizes table format for all
-allele_loss_2022 <- pop_count_adults_2022%>%
-  select(c(pop, total))%>%
-  rename("2022" = total)
-
-swap_Na_by_pop <- Na_by_pop%>%
-  slice(12)%>%
-  pivot_longer(c("LM", "LC", "SD", "SDo", "LB", "EC"))
-
-allele_loss_all <- only_OP%>%
-  select(c(pop, total))%>%
-  rename("OP" = total)%>%
-  mutate("2022" = allele_loss_2022$`2022`)%>%
-  mutate("Adult" = swap_Na_by_pop$value)%>%
-  mutate("Sum_Adult" = Adult - (OP + `2022`))%>%
-  select(-"Adult")%>%
-  pivot_longer(c("2022", "OP", "Sum_Adult"))%>%
-  mutate(region = case_when(pop == "LM" | pop == "LC" ~ "North", 
-                            pop == "SD" | pop == "EC" ~ "East",
-                            pop == "SDo" | pop == "LB" ~ "West"))
+alluvial_freq_num + alluvial_freq_perc
   
 
-allele_loss_all$name <- (ordered(allele_loss_all$name, levels=c("OP", "2022", "Sum_Adult")))
-allele_loss_all$pop <- (ordered(allele_loss_all$pop, levels=c("EC", "SD", "LC", "LM", "LB", "SDo")))
-
-allelic_retention_all <- allele_loss_all%>%
-  ggplot+
-  geom_bar(aes(x=pop, y=value, fill=name), stat="identity", position="stack")+
-  xlab("population") +
-  ylab(" # of alleles") +
-  scale_x_discrete(labels = c("EC" = "EC \n (n=128)", "SD" = "SD \n (n=122)", "LC" = "LC \n (n=138)", "LM" = "LM \n (n=127)", "LB" = "LB \n (n=108)", "SDo" = "SDo \n (n=68)"))+
-  scale_y_continuous(limits = c(0, 150), breaks = seq(0, 150, by=20))+
-  scale_fill_manual(name = "Stages", 
-                    values=c('#a994b0', '#8fb8b5', '#f2e56e'),
-                    labels = c("Lost after outplanting", "Lost before outplanting", "Present at all stages")) +
-  
-  # geom_text(label="7 (5.5%)", x="LM", y=124, size=3) +
-  theme_classic()+
-  facet_grid(~region, scales = "free_x")
-allelic_retention_all
-
-#table on poster was made in Google Sheets
 
 
 ####Performing AMOVA on MLLs####
